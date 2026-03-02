@@ -148,7 +148,10 @@ const TRADE_ROUTES: TradeRoute[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Simple seeded pseudo-random number generator for deterministic AI stats. */
+/**
+ * Park-Miller LCG for deterministic AI stats that stay consistent
+ * within a turn but vary across years.
+ */
 function seededRandom(seed: number): () => number {
   let s = seed;
   return () => {
@@ -158,7 +161,9 @@ function seededRandom(seed: number): () => number {
 }
 
 function buildRegions(playerNation: string, year: number): RegionData[] {
+  // Seed combines year with arbitrary primes for varied but reproducible results
   const rng = seededRandom(year * 7 + 31);
+  // Assign player to a region based on nation name hash
   const playerIndex = Math.abs(playerNation.length * 3 + 7) % BASE_REGIONS.length;
 
   return BASE_REGIONS.map((base, i) => {
