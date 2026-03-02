@@ -1,35 +1,279 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useCallback } from 'react';
+import type { Scenario, GameState } from './game/types';
+import { GameEngine } from './game/GameEngine';
+import { GOVERNMENT_TYPE_LABELS } from './game/constants';
+import StartScreen from './components/StartScreen';
+import EconomyPanel from './components/EconomyPanel';
+import PolicyPanel from './components/PolicyPanel';
+import InstitutionPanel from './components/InstitutionPanel';
+import InterestGroupPanel from './components/InterestGroupPanel';
+import HistoryChart from './components/HistoryChart';
+import NewsTicker from './components/NewsTicker';
+import TipPopup from './components/TipPopup';
+import EventDialog from './components/EventDialog';
+import GameOverScreen from './components/GameOverScreen';
+
+type ActiveTab = 'economy' | 'policy' | 'institutions' | 'groups' | 'history';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [engine, setEngine] = useState<GameEngine | null>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('economy');
+  const [showTips, setShowTips] = useState(true);
+
+  const handleStart = useCallback((scenario: Scenario) => {
+    const e = new GameEngine(scenario);
+    setEngine(e);
+    setGameState({ ...e.getState() });
+    setActiveTab('economy');
+    setShowTips(true);
+  }, []);
+
+  const handleNextTurn = useCallback(() => {
+    if (!engine) return;
+    const newState = engine.nextTurn();
+    setGameState({ ...newState });
+    setShowTips(true);
+  }, [engine]);
+
+  const handleApplyPolicy = useCallback((action: string, value: number) => {
+    if (!engine) return;
+    engine.applyPolicy(action, value);
+    setGameState({ ...engine.getState() });
+  }, [engine]);
+
+  const handleAdoptInstitution = useCallback((id: string) => {
+    if (!engine) return;
+    engine.adoptInstitution(id);
+    setGameState({ ...engine.getState() });
+  }, [engine]);
+
+  const handleEventChoice = useCallback((eventId: string, choiceIndex: number) => {
+    if (!engine) return;
+    engine.handleEventChoice(eventId, choiceIndex);
+    setGameState({ ...engine.getState() });
+  }, [engine]);
+
+  const handleRestart = useCallback(() => {
+    setEngine(null);
+    setGameState(null);
+  }, []);
+
+  // Start screen
+  if (!engine || !gameState) {
+    return <StartScreen onStart={handleStart} />;
+  }
+
+  // Game over
+  if (gameState.gameOver) {
+    return <GameOverScreen state={gameState} onRestart={handleRestart} />;
+  }
+
+  // Active event dialog
+  const activeEvent = gameState.activeEvents.length > 0 ? gameState.activeEvents[0] : null;
+
+  const tabs: { key: ActiveTab; label: string }[] = [
+    { key: 'economy', label: '経済' },
+    { key: 'policy', label: '政策' },
+    { key: 'institutions', label: '制度' },
+    { key: 'groups', label: '利益団体' },
+    { key: 'history', label: '歴史' },
+  ];
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div style={styles.app}>
+      {/* Header */}
+      <header style={styles.header}>
+        <div style={styles.headerLeft}>
+          <h1 style={styles.title}>In the Long Run</h1>
+          <span style={styles.nationName}>{gameState.nationName}</span>
+        </div>
+        <div style={styles.headerCenter}>
+          <span style={styles.year}>{gameState.year}年</span>
+          <span style={styles.era}>{gameState.era}</span>
+          <span style={styles.govType}>
+            {GOVERNMENT_TYPE_LABELS[gameState.political.governmentType]}
+          </span>
+        </div>
+        <div style={styles.headerRight}>
+          <div style={styles.quickStats}>
+            <span style={styles.stat}>GDP: {gameState.economic.gdp.toFixed(0)}</span>
+            <span style={styles.stat}>人口: {gameState.economic.population.toFixed(1)}M</span>
+            <span style={styles.stat}>安定度: {gameState.political.stability.toFixed(0)}</span>
+          </div>
+          <button style={styles.nextTurnBtn} onClick={handleNextTurn}>
+            次のターン ▶
+          </button>
+        </div>
+      </header>
+
+      {/* Tab Bar */}
+      <nav style={styles.tabBar}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === tab.key ? styles.tabBtnActive : {}),
+            }}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* Main Content */}
+      <main style={styles.main}>
+        <div style={styles.contentArea}>
+          {activeTab === 'economy' && <EconomyPanel economic={gameState.economic} />}
+          {activeTab === 'policy' && (
+            <PolicyPanel economic={gameState.economic} onApplyPolicy={handleApplyPolicy} />
+          )}
+          {activeTab === 'institutions' && (
+            <InstitutionPanel
+              institutions={gameState.institutions}
+              onAdopt={handleAdoptInstitution}
+            />
+          )}
+          {activeTab === 'groups' && (
+            <InterestGroupPanel interestGroups={gameState.interestGroups} />
+          )}
+          {activeTab === 'history' && <HistoryChart history={gameState.history} />}
+        </div>
+
+        {/* Sidebar: News */}
+        <aside style={styles.sidebar}>
+          <NewsTicker news={gameState.news} />
+        </aside>
+      </main>
+
+      {/* Event Dialog */}
+      {activeEvent && (
+        <EventDialog event={activeEvent} onChoice={handleEventChoice} />
+      )}
+
+      {/* Tips Popup */}
+      {showTips && (
+        <TipPopup tips={gameState.tips} onDismiss={() => setShowTips(false)} />
+      )}
+    </div>
+  );
 }
 
-export default App
+const styles: Record<string, React.CSSProperties> = {
+  app: {
+    minHeight: '100vh',
+    background: '#1a1a2e',
+    color: '#eee',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 24px',
+    background: '#16213e',
+    borderBottom: '1px solid rgba(255,255,255,0.1)',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  headerLeft: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '16px',
+  },
+  headerCenter: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+  title: {
+    margin: 0,
+    fontSize: '1.3rem',
+    color: '#e94560',
+    fontStyle: 'italic',
+  },
+  nationName: {
+    fontSize: '0.95rem',
+    color: '#aaa',
+  },
+  year: {
+    fontSize: '1.2rem',
+    fontWeight: 700,
+    color: '#fff',
+  },
+  era: {
+    fontSize: '0.85rem',
+    color: '#aaa',
+    padding: '2px 8px',
+    background: 'rgba(255,255,255,0.08)',
+    borderRadius: '4px',
+  },
+  govType: {
+    fontSize: '0.85rem',
+    color: '#ffcc00',
+  },
+  quickStats: {
+    display: 'flex',
+    gap: '12px',
+    fontSize: '0.82rem',
+    color: '#ccc',
+  },
+  stat: {
+    whiteSpace: 'nowrap',
+  },
+  nextTurnBtn: {
+    padding: '8px 20px',
+    fontSize: '0.95rem',
+    fontWeight: 700,
+    color: '#fff',
+    background: '#e94560',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+  tabBar: {
+    display: 'flex',
+    gap: '2px',
+    padding: '0 24px',
+    background: '#16213e',
+  },
+  tabBtn: {
+    padding: '10px 20px',
+    fontSize: '0.9rem',
+    color: '#aaa',
+    background: 'transparent',
+    border: 'none',
+    borderBottom: '2px solid transparent',
+    cursor: 'pointer',
+    transition: 'color 0.2s, border-color 0.2s',
+  },
+  tabBtnActive: {
+    color: '#fff',
+    borderBottomColor: '#e94560',
+  },
+  main: {
+    display: 'flex',
+    flex: 1,
+    padding: '16px 24px',
+    gap: '16px',
+    overflow: 'auto',
+  },
+  contentArea: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sidebar: {
+    width: '320px',
+    flexShrink: 0,
+  },
+};
+
+export default App;
