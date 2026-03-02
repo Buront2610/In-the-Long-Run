@@ -327,7 +327,7 @@ const WorldMap: React.FC<WorldMapProps> = ({
                       <div
                         style={{
                           ...styles.barInner,
-                          width: `${nation.economicStrength * 100}%`,
+                          width: `${nation.economicStrength}%`,
                           background: '#4a9eff',
                         }}
                       />
@@ -339,7 +339,7 @@ const WorldMap: React.FC<WorldMapProps> = ({
                       <div
                         style={{
                           ...styles.barInner,
-                          width: `${nation.militaryStrength * 100}%`,
+                          width: `${nation.militaryStrength}%`,
                           background: '#e94560',
                         }}
                       />
@@ -374,16 +374,16 @@ const WorldMap: React.FC<WorldMapProps> = ({
               <div style={styles.infoRow}>
                 <span style={styles.infoLabel}>経済力:</span>
                 <div style={styles.barOuter}>
-                  <div style={{ ...styles.barInner, width: `${selectedForeign.economicStrength * 100}%`, background: '#4a9eff' }} />
+                  <div style={{ ...styles.barInner, width: `${selectedForeign.economicStrength}%`, background: '#4a9eff' }} />
                 </div>
-                <span style={styles.barValue}>{(selectedForeign.economicStrength * 100).toFixed(0)}%</span>
+                <span style={styles.barValue}>{selectedForeign.economicStrength}%</span>
               </div>
               <div style={styles.infoRow}>
                 <span style={styles.infoLabel}>軍事力:</span>
                 <div style={styles.barOuter}>
-                  <div style={{ ...styles.barInner, width: `${selectedForeign.militaryStrength * 100}%`, background: '#e94560' }} />
+                  <div style={{ ...styles.barInner, width: `${selectedForeign.militaryStrength}%`, background: '#e94560' }} />
                 </div>
-                <span style={styles.barValue}>{(selectedForeign.militaryStrength * 100).toFixed(0)}%</span>
+                <span style={styles.barValue}>{selectedForeign.militaryStrength}%</span>
               </div>
             </div>
             <div style={styles.detailSection}>
