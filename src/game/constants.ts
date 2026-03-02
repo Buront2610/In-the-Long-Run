@@ -387,3 +387,18 @@ export const GOVERNMENT_TYPE_LABELS: Record<GovernmentType, string> = {
   [GovernmentType.MILITARY_JUNTA]: "軍事政権",
   [GovernmentType.THEOCRACY]: "神権政治",
 };
+
+// ── Era Labels ──────────────────────────────────────────────────────────────
+
+export const ERA_LABELS: Record<Era, string> = {
+  [Era.ANCIENT]: "古代・部族社会",
+  [Era.CLASSICAL]: "古典古代",
+  [Era.FEUDAL]: "封建時代",
+  [Era.EARLY_MODERN]: "初期近代",
+  [Era.ENLIGHTENMENT]: "啓蒙と革命",
+  [Era.IMPERIAL]: "帝国主義時代",
+  [Era.WORLD_WAR]: "世界大戦期",
+  [Era.COLD_WAR]: "冷戦期",
+  [Era.GLOBALIZATION]: "グローバル化時代",
+  [Era.MODERN]: "現代",
+};

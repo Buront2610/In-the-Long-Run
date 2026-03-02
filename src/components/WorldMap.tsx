@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { EconomicState, PoliticalState } from '../game/types';
 import { Era } from '../game/types';
+import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from '../game/constants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ const WorldMap: React.FC<WorldMapProps> = ({
       <div style={styles.header}>
         <span style={styles.headerTitle}>世界地図</span>
         <span style={styles.headerMeta}>
-          {era} — {year}年
+          {ERA_LABELS[era]} — {year}年
         </span>
       </div>
 
@@ -381,7 +382,7 @@ const WorldMap: React.FC<WorldMapProps> = ({
           </div>
           <div style={styles.infoRow}>
             <span style={styles.infoLabel}>体制:</span>
-            <span>{political.governmentType}</span>
+            <span>{GOVERNMENT_TYPE_LABELS[political.governmentType]}</span>
           </div>
           <div style={styles.infoRow}>
             <span style={styles.infoLabel}>GDP:</span>
