@@ -4,10 +4,9 @@ import type {
   Institution,
   InterestGroup,
   NewsItem,
-  GameEvent,
   HistoryRecord,
 } from "./types";
-import { Era, NewsType } from "./types";
+import { NewsType } from "./types";
 import {
   DEFAULT_ECONOMIC_STATE,
   DEFAULT_POLITICAL_STATE,
