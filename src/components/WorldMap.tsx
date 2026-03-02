@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { EconomicState, PoliticalState } from '../game/types';
-import { Era } from '../game/types';
+import type { EconomicState, PoliticalState, ForeignNation } from '../game/types';
+import { Era, DiplomaticStatus } from '../game/types';
 import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from '../game/constants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -11,9 +11,9 @@ interface WorldMapProps {
   year: number;
   economic: EconomicState;
   political: PoliticalState;
+  foreignNations: ForeignNation[];
+  onDiplomaticAction: (nationId: string, action: string) => void;
 }
-
-type DiplomaticStance = 'player' | 'friendly' | 'neutral' | 'rival' | 'hostile';
 
 interface RegionData {
   id: string;
@@ -22,10 +22,9 @@ interface RegionData {
   points: string;
   labelX: number;
   labelY: number;
+  nationId: string | null;  // null = player
   controller: string;
-  stance: DiplomaticStance;
-  gdpFactor: number;
-  militaryFactor: number;
+  status: DiplomaticStatus | 'PLAYER';
 }
 
 interface TradeRoute {
@@ -39,33 +38,25 @@ interface TradeRoute {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STANCE_COLORS: Record<DiplomaticStance, string> = {
-  player: '#e94560',
-  friendly: '#53d769',
-  neutral: '#4a9eff',
-  rival: '#ffcc00',
-  hostile: '#ff6b35',
+const STATUS_COLORS: Record<DiplomaticStatus | 'PLAYER', string> = {
+  [DiplomaticStatus.ALLIANCE]: '#53d769',
+  [DiplomaticStatus.FRIENDLY]: '#4a9eff',
+  [DiplomaticStatus.NEUTRAL]: '#aaa',
+  [DiplomaticStatus.RIVAL]: '#ffcc00',
+  [DiplomaticStatus.HOSTILE]: '#ff6b35',
+  [DiplomaticStatus.WAR]: '#e94560',
+  PLAYER: '#e94560',
 };
 
-const STANCE_LABELS: Record<DiplomaticStance, string> = {
-  player: '自国',
-  friendly: '友好',
-  neutral: '中立',
-  rival: '競合',
-  hostile: '敵対',
+const STATUS_LABELS: Record<DiplomaticStatus | 'PLAYER', string> = {
+  [DiplomaticStatus.ALLIANCE]: '同盟',
+  [DiplomaticStatus.FRIENDLY]: '友好',
+  [DiplomaticStatus.NEUTRAL]: '中立',
+  [DiplomaticStatus.RIVAL]: '競合',
+  [DiplomaticStatus.HOSTILE]: '敵対',
+  [DiplomaticStatus.WAR]: '戦争',
+  PLAYER: '自国',
 };
-
-const AI_NATION_NAMES = [
-  '鉄壁帝国',
-  '翡翠連邦',
-  '黄金王朝',
-  '紅蓮共和国',
-  '蒼穹同盟',
-  '暁の公国',
-  '深淵評議会',
-];
-
-const STANCES: DiplomaticStance[] = ['friendly', 'neutral', 'rival', 'hostile'];
 
 const BASE_REGIONS: Omit<RegionData, 'controller' | 'stance' | 'gdpFactor' | 'militaryFactor'>[] = [
   {
@@ -148,42 +139,31 @@ const TRADE_ROUTES: TradeRoute[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Park-Miller LCG for deterministic AI stats that stay consistent
- * within a turn but vary across years.
- */
-function seededRandom(seed: number): () => number {
-  let s = seed;
-  return () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
-
-function buildRegions(playerNation: string, year: number): RegionData[] {
-  // Seed combines year with arbitrary primes for varied but reproducible results
-  const rng = seededRandom(year * 7 + 31);
-  // Assign player to a region based on nation name hash
-  const playerIndex = Math.abs(playerNation.length * 3 + 7) % BASE_REGIONS.length;
+function buildRegions(
+  playerNation: string,
+  foreignNations: ForeignNation[],
+): RegionData[] {
+  const playerIndex =
+    Math.abs(playerNation.length * 3 + 7) % BASE_REGIONS.length;
 
   return BASE_REGIONS.map((base, i) => {
     if (i === playerIndex) {
       return {
         ...base,
+        nationId: null,
         controller: playerNation,
-        stance: 'player' as DiplomaticStance,
-        gdpFactor: 0.7 + rng() * 0.3,
-        militaryFactor: 0.5 + rng() * 0.5,
+        status: 'PLAYER' as const,
       };
     }
     const aiIndex = i > playerIndex ? i - 1 : i;
-    const stanceIdx = Math.floor(rng() * STANCES.length);
+    const nation = foreignNations[aiIndex % foreignNations.length] as
+      | ForeignNation
+      | undefined;
     return {
       ...base,
-      controller: AI_NATION_NAMES[aiIndex % AI_NATION_NAMES.length],
-      stance: STANCES[stanceIdx],
-      gdpFactor: 0.2 + rng() * 0.8,
-      militaryFactor: 0.2 + rng() * 0.8,
+      nationId: nation?.id ?? `ai-${aiIndex}`,
+      controller: nation?.name ?? `国家${aiIndex + 1}`,
+      status: nation?.status ?? DiplomaticStatus.NEUTRAL,
     };
   });
 }
@@ -202,12 +182,15 @@ const WorldMap: React.FC<WorldMapProps> = ({
   year,
   economic,
   political,
+  foreignNations,
+  onDiplomaticAction,
 }) => {
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  const [selectedNation, setSelectedNation] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  const regions = buildRegions(playerNation, year);
-  const playerRegion = regions.find((r) => r.stance === 'player');
+  const regions = buildRegions(playerNation, foreignNations);
+  const playerRegion = regions.find((r) => r.status === 'PLAYER');
   const tradePartners = playerRegion
     ? TRADE_ROUTES.filter(
         (tr) => tr.from === playerRegion.id || tr.to === playerRegion.id,
@@ -221,6 +204,13 @@ const WorldMap: React.FC<WorldMapProps> = ({
     ? regions.find((r) => r.id === hoveredRegion) ?? null
     : null;
 
+  const selectedRegion = selectedNation
+    ? regions.find((r) => r.nationId === selectedNation) ?? null
+    : null;
+  const selectedForeign = selectedNation
+    ? foreignNations.find((n) => n.id === selectedNation) ?? null
+    : null;
+
   const handleMouseMove = (e: React.MouseEvent<SVGElement>) => {
     const svg = e.currentTarget.closest('svg');
     if (!svg) return;
@@ -229,6 +219,14 @@ const WorldMap: React.FC<WorldMapProps> = ({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     });
+  };
+
+  const handleRegionClick = (region: RegionData) => {
+    if (region.status === 'PLAYER') {
+      setSelectedNation(null);
+      return;
+    }
+    setSelectedNation(region.nationId === selectedNation ? null : region.nationId);
   };
 
   return (
@@ -266,18 +264,20 @@ const WorldMap: React.FC<WorldMapProps> = ({
           {/* Regions */}
           {regions.map((region) => {
             const isHovered = hoveredRegion === region.id;
-            const fillColor = STANCE_COLORS[region.stance];
+            const isSelected = region.nationId !== null && region.nationId === selectedNation;
+            const fillColor = STATUS_COLORS[region.status];
             return (
               <g key={region.id}>
                 <polygon
                   points={region.points}
                   fill={fillColor}
-                  fillOpacity={isHovered ? 0.8 : 0.45}
-                  stroke={isHovered ? '#fff' : 'rgba(255,255,255,0.3)'}
-                  strokeWidth={isHovered ? 2 : 1}
+                  fillOpacity={isSelected ? 0.9 : isHovered ? 0.8 : 0.45}
+                  stroke={isSelected ? '#fff' : isHovered ? '#fff' : 'rgba(255,255,255,0.3)'}
+                  strokeWidth={isSelected ? 2.5 : isHovered ? 2 : 1}
                   style={{ cursor: 'pointer', transition: 'fill-opacity 0.2s, stroke 0.2s' }}
                   onMouseEnter={() => setHoveredRegion(region.id)}
                   onMouseLeave={() => setHoveredRegion(null)}
+                  onClick={() => handleRegionClick(region)}
                 />
                 <text
                   x={region.labelX}
@@ -312,51 +312,184 @@ const WorldMap: React.FC<WorldMapProps> = ({
             </div>
             <div style={styles.tooltipRow}>
               <span style={styles.tooltipLabel}>外交姿勢:</span>
-              <span style={{ color: STANCE_COLORS[hoveredData.stance] }}>
-                {STANCE_LABELS[hoveredData.stance]}
+              <span style={{ color: STATUS_COLORS[hoveredData.status] }}>
+                {STATUS_LABELS[hoveredData.status]}
               </span>
             </div>
-            <div style={styles.tooltipRow}>
-              <span style={styles.tooltipLabel}>GDP:</span>
-              <div style={styles.barOuter}>
-                <div
-                  style={{
-                    ...styles.barInner,
-                    width: `${hoveredData.gdpFactor * 100}%`,
-                    background: '#4a9eff',
-                  }}
-                />
-              </div>
-            </div>
-            <div style={styles.tooltipRow}>
-              <span style={styles.tooltipLabel}>軍事力:</span>
-              <div style={styles.barOuter}>
-                <div
-                  style={{
-                    ...styles.barInner,
-                    width: `${hoveredData.militaryFactor * 100}%`,
-                    background: '#e94560',
-                  }}
-                />
-              </div>
-            </div>
+            {hoveredData.nationId && (() => {
+              const nation = foreignNations.find((n) => n.id === hoveredData.nationId);
+              if (!nation) return null;
+              return (
+                <>
+                  <div style={styles.tooltipRow}>
+                    <span style={styles.tooltipLabel}>経済力:</span>
+                    <div style={styles.barOuter}>
+                      <div
+                        style={{
+                          ...styles.barInner,
+                          width: `${nation.economicStrength * 100}%`,
+                          background: '#4a9eff',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div style={styles.tooltipRow}>
+                    <span style={styles.tooltipLabel}>軍事力:</span>
+                    <div style={styles.barOuter}>
+                      <div
+                        style={{
+                          ...styles.barInner,
+                          width: `${nation.militaryStrength * 100}%`,
+                          background: '#e94560',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
 
+      {/* Selected nation detail panel */}
+      {selectedRegion && selectedForeign && (
+        <div style={styles.detailPanel}>
+          <div style={styles.detailHeader}>
+            <span style={styles.detailTitle}>{selectedForeign.name}</span>
+            <button
+              style={styles.detailClose}
+              onClick={() => setSelectedNation(null)}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={styles.detailGrid}>
+            <div style={styles.detailSection}>
+              <div style={styles.infoTitle}>国家情報</div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>体制:</span>
+                <span>{GOVERNMENT_TYPE_LABELS[selectedForeign.governmentType]}</span>
+              </div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>経済力:</span>
+                <div style={styles.barOuter}>
+                  <div style={{ ...styles.barInner, width: `${selectedForeign.economicStrength * 100}%`, background: '#4a9eff' }} />
+                </div>
+                <span style={styles.barValue}>{(selectedForeign.economicStrength * 100).toFixed(0)}%</span>
+              </div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>軍事力:</span>
+                <div style={styles.barOuter}>
+                  <div style={{ ...styles.barInner, width: `${selectedForeign.militaryStrength * 100}%`, background: '#e94560' }} />
+                </div>
+                <span style={styles.barValue}>{(selectedForeign.militaryStrength * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+            <div style={styles.detailSection}>
+              <div style={styles.infoTitle}>外交状況</div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>関係:</span>
+                <span style={{ color: STATUS_COLORS[selectedForeign.status], fontWeight: 'bold' }}>
+                  {STATUS_LABELS[selectedForeign.status]}
+                </span>
+              </div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>好感度:</span>
+                <span style={{ color: selectedForeign.opinion >= 0 ? '#53d769' : '#e94560' }}>
+                  {selectedForeign.opinion > 0 ? '+' : ''}{selectedForeign.opinion}
+                </span>
+              </div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>貿易協定:</span>
+                <span style={{ color: selectedForeign.tradeAgreement ? '#53d769' : '#aaa' }}>
+                  {selectedForeign.tradeAgreement ? '締結済み' : 'なし'}
+                </span>
+              </div>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>同盟:</span>
+                <span style={{ color: selectedForeign.alliance ? '#53d769' : '#aaa' }}>
+                  {selectedForeign.alliance ? '同盟中' : 'なし'}
+                </span>
+              </div>
+            </div>
+            <div style={styles.detailSection}>
+              <div style={styles.infoTitle}>外交アクション</div>
+              <button
+                style={styles.actionBtn}
+                onClick={() => onDiplomaticAction(selectedForeign.id, 'improve_relations')}
+              >
+                🤝 関係改善 <span style={styles.actionCost}>💰10</span>
+              </button>
+              <button
+                style={{
+                  ...styles.actionBtn,
+                  ...(selectedForeign.tradeAgreement || selectedForeign.opinion <= -10
+                    ? styles.actionBtnDisabled
+                    : {}),
+                }}
+                disabled={selectedForeign.tradeAgreement || selectedForeign.opinion <= -10}
+                onClick={() => onDiplomaticAction(selectedForeign.id, 'trade_agreement')}
+              >
+                📦 貿易協定
+              </button>
+              <button
+                style={{
+                  ...styles.actionBtn,
+                  ...(selectedForeign.alliance || selectedForeign.opinion <= 30
+                    ? styles.actionBtnDisabled
+                    : {}),
+                }}
+                disabled={selectedForeign.alliance || selectedForeign.opinion <= 30}
+                onClick={() => onDiplomaticAction(selectedForeign.id, 'form_alliance')}
+              >
+                🛡️ 同盟締結
+              </button>
+              <button
+                style={styles.actionBtn}
+                onClick={() => onDiplomaticAction(selectedForeign.id, 'denounce')}
+              >
+                📢 非難声明
+              </button>
+              <button
+                style={{
+                  ...styles.actionBtn,
+                  ...(selectedForeign.opinion >= 20
+                    ? styles.actionBtnDisabled
+                    : {}),
+                }}
+                disabled={selectedForeign.opinion >= 20}
+                onClick={() => onDiplomaticAction(selectedForeign.id, 'economic_sanctions')}
+              >
+                🚫 経済制裁
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Legend */}
       <div style={styles.legend}>
-        {(Object.keys(STANCE_COLORS) as DiplomaticStance[]).map((stance) => (
-          <div key={stance} style={styles.legendItem}>
+        {(Object.values(DiplomaticStatus) as DiplomaticStatus[]).map((status) => (
+          <div key={status} style={styles.legendItem}>
             <span
               style={{
                 ...styles.legendSwatch,
-                background: STANCE_COLORS[stance],
+                background: STATUS_COLORS[status],
               }}
             />
-            <span style={styles.legendText}>{STANCE_LABELS[stance]}</span>
+            <span style={styles.legendText}>{STATUS_LABELS[status]}</span>
           </div>
         ))}
+        <div style={styles.legendItem}>
+          <span
+            style={{
+              ...styles.legendSwatch,
+              background: STATUS_COLORS.PLAYER,
+            }}
+          />
+          <span style={styles.legendText}>自国</span>
+        </div>
         <div style={styles.legendItem}>
           <svg width={24} height={10}>
             <line
@@ -409,7 +542,7 @@ const WorldMap: React.FC<WorldMapProps> = ({
                 <span
                   style={{
                     ...styles.legendSwatch,
-                    background: STANCE_COLORS[p.stance],
+                    background: STATUS_COLORS[p.status],
                   }}
                 />
                 <span>{p.controller}</span>
@@ -421,18 +554,19 @@ const WorldMap: React.FC<WorldMapProps> = ({
 
         <div style={styles.infoPanelSection}>
           <div style={styles.infoTitle}>外交概況</div>
-          {(['friendly', 'neutral', 'rival', 'hostile'] as DiplomaticStance[]).map(
-            (stance) => {
-              const count = regions.filter((r) => r.stance === stance).length;
+          {(Object.values(DiplomaticStatus) as DiplomaticStatus[]).map(
+            (status) => {
+              const count = regions.filter((r) => r.status === status).length;
+              if (count === 0) return null;
               return (
-                <div key={stance} style={styles.infoRow}>
+                <div key={status} style={styles.infoRow}>
                   <span
                     style={{
                       ...styles.legendSwatch,
-                      background: STANCE_COLORS[stance],
+                      background: STATUS_COLORS[status],
                     }}
                   />
-                  <span>{STANCE_LABELS[stance]}: {count}国</span>
+                  <span>{STATUS_LABELS[status]}: {count}国</span>
                 </div>
               );
             },
@@ -576,6 +710,72 @@ const styles: Record<string, React.CSSProperties> = {
   infoLabel: {
     color: '#aaa',
     minWidth: 55,
+  },
+  detailPanel: {
+    background: '#0f3460',
+    borderRadius: 6,
+    padding: 12,
+    border: '1px solid rgba(255,255,255,0.15)',
+  },
+  detailHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderBottom: '1px solid rgba(255,255,255,0.1)',
+    paddingBottom: 6,
+  },
+  detailTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  detailClose: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.2)',
+    color: '#aaa',
+    cursor: 'pointer',
+    borderRadius: 4,
+    fontSize: 14,
+    padding: '2px 8px',
+  },
+  detailGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: 12,
+  },
+  detailSection: {
+    background: 'rgba(0,0,0,0.2)',
+    borderRadius: 6,
+    padding: 10,
+  },
+  barValue: {
+    fontSize: 11,
+    color: '#ccc',
+    minWidth: 30,
+    textAlign: 'right' as const,
+  },
+  actionBtn: {
+    display: 'block',
+    width: '100%',
+    padding: '6px 8px',
+    marginBottom: 4,
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 4,
+    color: '#eee',
+    fontSize: 12,
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+  },
+  actionBtnDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+  },
+  actionCost: {
+    float: 'right' as const,
+    fontSize: 11,
+    color: '#ffcc00',
   },
 };
 
