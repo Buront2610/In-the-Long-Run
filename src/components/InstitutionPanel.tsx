@@ -38,14 +38,17 @@ const effectLabels: Record<string, string> = {
   populationGrowth: '人口増加率',
 };
 
+const NEGATIVE_METRICS = new Set(['corruption', 'unrest', 'unemployment', 'inflation', 'giniCoefficient']);
+
 function formatEffects(effects: Record<string, number>): React.ReactNode {
   return (
     <span>
       {Object.entries(effects).map(([k, v], i) => {
         const label = effectLabels[k] ?? k;
+        const isNegativeMetric = NEGATIVE_METRICS.has(k);
         const color = v > 0
-          ? (k === 'corruption' || k === 'unrest' || k === 'unemployment' || k === 'inflation' || k === 'giniCoefficient' ? '#e94560' : '#53d769')
-          : (k === 'corruption' || k === 'unrest' || k === 'unemployment' || k === 'inflation' || k === 'giniCoefficient' ? '#53d769' : '#e94560');
+          ? (isNegativeMetric ? '#e94560' : '#53d769')
+          : (isNegativeMetric ? '#53d769' : '#e94560');
         return (
           <span key={k}>
             {i > 0 ? '  ' : ''}

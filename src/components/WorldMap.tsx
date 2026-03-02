@@ -436,11 +436,11 @@ const WorldMap: React.FC<WorldMapProps> = ({
               <button
                 style={{
                   ...styles.actionBtn,
-                  ...(selectedForeign.alliance || selectedForeign.opinion <= 30
+                  ...(selectedForeign.alliance || selectedForeign.opinion < 30
                     ? styles.actionBtnDisabled
                     : {}),
                 }}
-                disabled={selectedForeign.alliance || selectedForeign.opinion <= 30}
+                disabled={selectedForeign.alliance || selectedForeign.opinion < 30}
                 onClick={() => onDiplomaticAction(selectedForeign.id, 'form_alliance')}
               >
                 🛡️ 同盟締結
