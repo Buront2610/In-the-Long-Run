@@ -46,6 +46,15 @@ export enum InterestGroupType {
   BUREAUCRATS = "BUREAUCRATS",
 }
 
+export enum DiplomaticStatus {
+  ALLIANCE = "ALLIANCE",
+  FRIENDLY = "FRIENDLY",
+  NEUTRAL = "NEUTRAL",
+  RIVAL = "RIVAL",
+  HOSTILE = "HOSTILE",
+  WAR = "WAR",
+}
+
 export enum NewsType {
   POLITICAL = "POLITICAL",
   ECONOMIC = "ECONOMIC",
@@ -105,6 +114,10 @@ export interface Institution {
   adopted: boolean;
   unlockConditions: string;
   effects: Record<string, number>;
+  adoptionCost: number;         // treasury cost to adopt
+  stabilityImpact: number;      // stability change when adopted
+  prerequisiteIds: string[];    // IDs of required institutions
+  revocable: boolean;           // whether it can be removed
 }
 
 // ── Interest Groups ────────────────────────────────────────────────────────────
@@ -116,6 +129,29 @@ export interface InterestGroup {
   satisfaction: number;
   demands: string[];
   type: InterestGroupType;
+}
+
+// ── Foreign Nations & Diplomacy ────────────────────────────────────────────────
+
+export interface ForeignNation {
+  id: string;
+  name: string;
+  governmentType: GovernmentType;
+  militaryStrength: number;
+  economicStrength: number;
+  status: DiplomaticStatus;
+  opinion: number;              // -100 to 100
+  tradeAgreement: boolean;
+  alliance: boolean;
+}
+
+export interface DiplomaticAction {
+  id: string;
+  name: string;
+  description: string;
+  targetNationId: string;
+  cost: number;
+  effects: Record<string, number>;
 }
 
 // ── Events & News ──────────────────────────────────────────────────────────────
@@ -190,6 +226,7 @@ export interface GameState {
   political: PoliticalState;
   institutions: Institution[];
   interestGroups: InterestGroup[];
+  foreignNations: ForeignNation[];
   activeEvents: GameEvent[];
   news: NewsItem[];
   history: HistoryRecord[];

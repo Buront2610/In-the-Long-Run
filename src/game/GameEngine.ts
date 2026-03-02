@@ -3,6 +3,7 @@ import type {
   Scenario,
   Institution,
   InterestGroup,
+  ForeignNation,
   NewsItem,
   HistoryRecord,
 } from "./types";
@@ -12,6 +13,7 @@ import {
   DEFAULT_POLITICAL_STATE,
   INITIAL_INSTITUTIONS,
   INITIAL_INTEREST_GROUPS,
+  INITIAL_FOREIGN_NATIONS,
   getEraForYear,
 } from "./constants";
 import { generateRandomEvent } from "./events";
@@ -35,6 +37,10 @@ function deepCopyInterestGroups(src: InterestGroup[]): InterestGroup[] {
     ...ig,
     demands: [...ig.demands],
   }));
+}
+
+function deepCopyForeignNations(src: ForeignNation[]): ForeignNation[] {
+  return src.map((fn) => ({ ...fn }));
 }
 
 // ── Game Engine ─────────────────────────────────────────────────────────────
@@ -65,6 +71,7 @@ export class GameEngine {
       },
       institutions: deepCopyInstitutions(INITIAL_INSTITUTIONS),
       interestGroups: deepCopyInterestGroups(INITIAL_INTEREST_GROUPS),
+      foreignNations: deepCopyForeignNations(INITIAL_FOREIGN_NATIONS),
       activeEvents: [],
       news: [],
       history: [],
