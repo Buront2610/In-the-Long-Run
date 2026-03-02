@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { Scenario, GameState } from './game/types';
 import { GameEngine } from './game/GameEngine';
-import { GOVERNMENT_TYPE_LABELS } from './game/constants';
+import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from './game/constants';
 import StartScreen from './components/StartScreen';
 import EconomyPanel from './components/EconomyPanel';
 import PolicyPanel from './components/PolicyPanel';
@@ -12,8 +12,9 @@ import NewsTicker from './components/NewsTicker';
 import TipPopup from './components/TipPopup';
 import EventDialog from './components/EventDialog';
 import GameOverScreen from './components/GameOverScreen';
+import WorldMap from './components/WorldMap';
 
-type ActiveTab = 'economy' | 'policy' | 'institutions' | 'groups' | 'history';
+type ActiveTab = 'economy' | 'policy' | 'institutions' | 'groups' | 'history' | 'map';
 
 function App() {
   const [engine, setEngine] = useState<GameEngine | null>(null);
@@ -78,6 +79,7 @@ function App() {
     { key: 'institutions', label: '制度' },
     { key: 'groups', label: '利益団体' },
     { key: 'history', label: '歴史' },
+    { key: 'map', label: '世界地図' },
   ];
 
   return (
@@ -90,7 +92,7 @@ function App() {
         </div>
         <div style={styles.headerCenter}>
           <span style={styles.year}>{gameState.year}年</span>
-          <span style={styles.era}>{gameState.era}</span>
+          <span style={styles.era}>{ERA_LABELS[gameState.era]}</span>
           <span style={styles.govType}>
             {GOVERNMENT_TYPE_LABELS[gameState.political.governmentType]}
           </span>
@@ -140,6 +142,15 @@ function App() {
             <InterestGroupPanel interestGroups={gameState.interestGroups} />
           )}
           {activeTab === 'history' && <HistoryChart history={gameState.history} />}
+          {activeTab === 'map' && (
+            <WorldMap
+              playerNation={gameState.nationName}
+              era={gameState.era}
+              year={gameState.year}
+              economic={gameState.economic}
+              political={gameState.political}
+            />
+          )}
         </div>
 
         {/* Sidebar: News */}
