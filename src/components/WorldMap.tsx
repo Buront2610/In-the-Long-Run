@@ -58,7 +58,7 @@ const STATUS_LABELS: Record<DiplomaticStatus | 'PLAYER', string> = {
   PLAYER: '自国',
 };
 
-const BASE_REGIONS: Omit<RegionData, 'controller' | 'stance' | 'gdpFactor' | 'militaryFactor'>[] = [
+const BASE_REGIONS: Omit<RegionData, 'controller' | 'nationId' | 'status'>[] = [
   {
     id: 'northern',
     name: '北方大陸',
