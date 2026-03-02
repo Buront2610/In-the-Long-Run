@@ -320,79 +320,152 @@ export class GameEngine {
     const econ = s.economic;
     const pol = s.political;
 
+    // ── Fiscal Policy ───────────────────────────────────────────────────
     // Tax revenue
     const taxRevenue = (econ.gdp * econ.taxRate) / 100;
 
-    // Total spending (percentage-based, relative to GDP)
+    // Spending categories are % of the government budget (tax revenue)
     const sp = econ.governmentSpending;
     const totalSpendingPct =
       sp.defense + sp.education + sp.infrastructure + sp.welfare + sp.research;
-    const totalSpending = (econ.gdp * totalSpendingPct) / 100;
+    const totalSpending = (taxRevenue * totalSpendingPct) / 100;
 
-    // Budget balance
-    const budgetBalance = taxRevenue - totalSpending;
+    // Interest payments on outstanding debt (effective rate: 2-8% depending on risk)
+    const riskPremium = econ.debtToGdpRatio > 100 ? 0.03 : econ.debtToGdpRatio > 60 ? 0.01 : 0;
+    const effectiveInterestRate = 0.02 + riskPremium + Math.max(0, econ.inflation - 2) * 0.005;
+    const interestPayment = econ.debt * effectiveInterestRate;
+
+    // Budget balance (after interest)
+    const budgetBalance = taxRevenue - totalSpending - interestPayment;
     econ.treasury += budgetBalance;
-    if (budgetBalance < 0 && econ.treasury < 0) {
+    if (econ.treasury < 0) {
       // Shortfall covered by borrowing
       econ.debt += Math.abs(econ.treasury);
       econ.treasury = 0;
     } else if (budgetBalance > 0) {
-      econ.debt = Math.max(0, econ.debt - budgetBalance * 0.5);
+      // Surplus can pay down debt
+      const debtRepayment = Math.min(budgetBalance * 0.5, econ.debt);
+      econ.debt = Math.max(0, econ.debt - debtRepayment);
     }
 
-    // Spending efficiency bonus to GDP growth
+    // ── GDP Growth ──────────────────────────────────────────────────────
+    // Spending efficiency bonus: actual spending amounts relative to GDP drive growth
+    const actualInfraSpend = (taxRevenue * sp.infrastructure) / 100;
+    const actualEduSpend = (taxRevenue * sp.education) / 100;
+    const actualResearchSpend = (taxRevenue * sp.research) / 100;
+    const spendingToGdpRatio = (actualInfraSpend + actualEduSpend + actualResearchSpend) / Math.max(1, econ.gdp);
     const efficiencyBonus =
-      (pol.bureaucracyEfficiency / 100) *
-      (sp.infrastructure * 0.02 + sp.education * 0.01 + sp.research * 0.015);
+      (pol.bureaucracyEfficiency / 100) * spendingToGdpRatio * 15;
 
-    // GDP growth
-    const effectiveGrowth = econ.gdpGrowth + efficiencyBonus;
+    // High corruption reduces growth efficiency
+    const corruptionDrag = pol.corruption > 30 ? (pol.corruption - 30) * 0.02 : 0;
+
+    // High tax rates create diminishing returns (Laffer curve effect)
+    const taxDrag = econ.taxRate > 50 ? (econ.taxRate - 50) * 0.03 : 0;
+
+    // High debt-to-GDP creates drag on growth
+    const debtDrag = econ.debtToGdpRatio > 80 ? (econ.debtToGdpRatio - 80) * 0.01 : 0;
+
+    // Mean reversion: extreme growth rates naturally moderate
+    const meanReversionTarget = 2.0;
+    const meanReversion = (meanReversionTarget - econ.gdpGrowth) * 0.1;
+
+    const effectiveGrowth = econ.gdpGrowth + efficiencyBonus + meanReversion - corruptionDrag - taxDrag - debtDrag;
     econ.gdp = Math.max(1, econ.gdp * (1 + effectiveGrowth / 100));
 
-    // Population growth
+    // Update base GDP growth rate with natural drift
+    econ.gdpGrowth = clamp(econ.gdpGrowth + meanReversion * 0.5, -20, 30);
+
+    // ── Population ──────────────────────────────────────────────────────
+    // Population growth responds to economic conditions
+    const welfareEffect = (sp.welfare > 20 ? 0.1 : -0.05);
+    const prosperityEffect = econ.gdp / Math.max(1, econ.population) > 15 ? -0.1 : 0.05; // demographic transition
+    econ.populationGrowth = clamp(
+      econ.populationGrowth + welfareEffect + prosperityEffect,
+      -2, 5,
+    );
     econ.population = Math.max(
       1,
       econ.population * (1 + econ.populationGrowth / 100),
     );
 
-    // Inflation: deficit spending pushes inflation up
-    if (budgetBalance < 0) {
-      econ.inflation = clamp(
-        econ.inflation + Math.abs(budgetBalance / econ.gdp) * 10,
-        -5,
-        100,
-      );
-    } else {
-      econ.inflation = clamp(econ.inflation - 0.3, -5, 100);
-    }
+    // ── Inflation (NK Phillips Curve-inspired) ──────────────────────────
+    // π_t ≈ inertia + demand_pull + fiscal_push - central_bank_stabilization
+    const hasCentralBank = s.institutions.some((i) => i.id === "central_bank" && i.adopted);
+    const inflationTarget = 2.0;
+    const inflationInertia = econ.inflation * 0.6;
+    const demandPull = (effectiveGrowth - 2.0) * 0.3;
+    const fiscalPush = budgetBalance < 0 ? Math.abs(budgetBalance / Math.max(1, econ.gdp)) * 8 : 0;
+    const centralBankEffect = hasCentralBank ? (econ.inflation - inflationTarget) * 0.2 : 0;
 
-    // Unemployment: inversely related to GDP growth
-    econ.unemployment = clamp(econ.unemployment - effectiveGrowth * 0.5, 0, 50);
+    econ.inflation = clamp(
+      inflationInertia + demandPull + fiscalPush - centralBankEffect + (1 - 0.6) * inflationTarget,
+      -5,
+      100,
+    );
 
-    // Corruption slowly increases without institutional checks
+    // ── Unemployment (Okun's Law with NAIRU) ────────────────────────────
+    const nairu = 5.0;
+    // Okun's law: 1% above-trend growth reduces unemployment by ~0.3%
+    const unemploymentChange = -(effectiveGrowth - 2.0) * 0.3;
+    // Natural tendency toward NAIRU (stronger pull to prevent 0% unemployment)
+    const nairuPull = (nairu - econ.unemployment) * 0.15;
+    econ.unemployment = clamp(econ.unemployment + unemploymentChange + nairuPull, 1, 50);
+
+    // ── Inequality (Gini Coefficient) ───────────────────────────────────
+    // Growth without redistribution increases inequality
+    const growthInequalityPush = effectiveGrowth > 0 ? effectiveGrowth * 0.002 : 0;
+    // Progressive taxation and welfare reduce inequality
+    const redistributionEffect = (econ.taxRate > 30 ? 0.002 : 0) + (sp.welfare > 25 ? 0.003 : 0);
+    // Education reduces long-term inequality
+    const educationEquality = sp.education > 20 ? 0.001 : 0;
+    econ.giniCoefficient = clamp(
+      econ.giniCoefficient + growthInequalityPush - redistributionEffect - educationEquality,
+      0.2,
+      0.8,
+    );
+
+    // ── Corruption ──────────────────────────────────────────────────────
     const adoptedAntiCorruption = s.institutions.filter(
       (i) => i.adopted && i.effects.corruption && i.effects.corruption < 0,
     ).length;
     const corruptionDrift = adoptedAntiCorruption > 0 ? -0.5 : 0.3;
-    pol.corruption = clamp(pol.corruption + corruptionDrift, 0, 100);
+    // High spending with low transparency breeds corruption
+    const spendingCorruption = totalSpendingPct > 90 && pol.bureaucracyEfficiency < 50 ? 0.5 : 0;
+    pol.corruption = clamp(pol.corruption + corruptionDrift + spendingCorruption, 0, 100);
 
-    // Stability: affected by unrest, corruption, economic performance
+    // ── Stability ───────────────────────────────────────────────────────
     const stabilityDelta =
-      (econ.gdpGrowth > 0 ? 1 : -2) +
-      (pol.unrest > 50 ? -3 : 0) +
-      (pol.corruption > 60 ? -2 : 0) +
-      (econ.unemployment > 15 ? -2 : 0);
+      (effectiveGrowth > 2 ? 1 : effectiveGrowth > 0 ? 0.5 : effectiveGrowth > -2 ? -0.5 : -2) +
+      (pol.unrest > 70 ? -3 : pol.unrest > 50 ? -1.5 : pol.unrest > 30 ? -0.5 : 0.5) +
+      (pol.corruption > 70 ? -1.5 : pol.corruption > 50 ? -0.5 : 0) +
+      (econ.unemployment > 20 ? -1.5 : econ.unemployment > 12 ? -0.5 : 0) +
+      (econ.inflation > 15 ? -1.5 : econ.inflation > 8 ? -0.5 : 0);
     pol.stability = clamp(pol.stability + stabilityDelta, 0, 100);
 
-    // Unrest naturally decays slightly if stability is okay
-    if (pol.stability > 50) {
-      pol.unrest = clamp(pol.unrest - 1, 0, 100);
-    }
+    // Unrest dynamics: high inequality and unemployment fuel unrest
+    const unrestPush =
+      (econ.giniCoefficient > 0.5 ? 1 : 0) +
+      (econ.unemployment > 10 ? 1 : 0) +
+      (econ.inflation > 8 ? 1 : 0);
+    const unrestDecay = pol.stability > 50 ? -1.5 : pol.stability > 30 ? -0.5 : 0;
+    pol.unrest = clamp(pol.unrest + unrestPush + unrestDecay, 0, 100);
 
-    // Update debt-to-GDP ratio
+    // ── Update Derived Values ───────────────────────────────────────────
     econ.debtToGdpRatio = econ.gdp > 0 ? (econ.debt / econ.gdp) * 100 : 0;
 
-    // Clamp key values
+    // Generate fiscal news
+    if (budgetBalance < -econ.gdp * 0.05) {
+      this.addNewsItem("深刻な財政赤字が続いています。", NewsType.ECONOMIC);
+    }
+    if (econ.inflation > 10) {
+      this.addNewsItem("高インフレが国民生活を圧迫しています。", NewsType.ECONOMIC);
+    }
+    if (econ.debtToGdpRatio > 100) {
+      this.addNewsItem("国債残高がGDPを超え、財政の持続可能性が懸念されています。", NewsType.ECONOMIC);
+    }
+
+    // Clamp & round key values
     econ.treasury = Math.round(econ.treasury * 100) / 100;
     econ.gdp = Math.round(econ.gdp * 100) / 100;
     econ.population = Math.round(econ.population * 100) / 100;
@@ -492,7 +565,7 @@ export class GameEngine {
         "国家の安定が完全に崩壊しました。ゲームオーバー。",
         NewsType.POLITICAL,
       );
-    } else if (s.economic.treasury < -500) {
+    } else if (s.economic.debtToGdpRatio > 300) {
       s.gameOver = true;
       this.addNewsItem(
         "国家が財政破綻しました。ゲームオーバー。",
@@ -503,6 +576,12 @@ export class GameEngine {
       this.addNewsItem(
         "全国的な反乱が発生し、政権が崩壊しました。ゲームオーバー。",
         NewsType.POLITICAL,
+      );
+    } else if (s.economic.inflation > 50) {
+      s.gameOver = true;
+      this.addNewsItem(
+        "ハイパーインフレーションにより経済が崩壊しました。ゲームオーバー。",
+        NewsType.ECONOMIC,
       );
     }
   }
