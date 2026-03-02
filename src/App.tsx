@@ -49,6 +49,18 @@ function App() {
     setGameState({ ...engine.getState() });
   }, [engine]);
 
+  const handleRevokeInstitution = useCallback((id: string) => {
+    if (!engine) return;
+    engine.revokeInstitution(id);
+    setGameState({ ...engine.getState() });
+  }, [engine]);
+
+  const handleDiplomaticAction = useCallback((nationId: string, action: string) => {
+    if (!engine) return;
+    engine.performDiplomaticAction(nationId, action);
+    setGameState({ ...engine.getState() });
+  }, [engine]);
+
   const handleEventChoice = useCallback((eventId: string, choiceIndex: number) => {
     if (!engine) return;
     engine.handleEventChoice(eventId, choiceIndex);
@@ -136,6 +148,8 @@ function App() {
             <InstitutionPanel
               institutions={gameState.institutions}
               onAdopt={handleAdoptInstitution}
+              onRevoke={handleRevokeInstitution}
+              treasury={gameState.economic.treasury}
             />
           )}
           {activeTab === 'groups' && (
@@ -149,6 +163,8 @@ function App() {
               year={gameState.year}
               economic={gameState.economic}
               political={gameState.political}
+              foreignNations={gameState.foreignNations}
+              onDiplomaticAction={handleDiplomaticAction}
             />
           )}
         </div>
