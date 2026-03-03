@@ -89,6 +89,11 @@ export interface EconomicState {
   tradeBalance: number;
   giniCoefficient: number;
   treasury: number;
+  fiscalBalance: number;       // 財政収支 (実額)
+  primaryBalance: number;      // 基礎的財政収支 (利払い前)
+  totalSpendingRate: number;   // 総歳出のGDP比%
+  totalRevenueRate: number;    // 総歳入のGDP比% (≒税率)
+  isWarEconomy: boolean;       // 総力戦経済モード
 }
 
 // ── Political State ────────────────────────────────────────────────────────────
@@ -234,4 +239,5 @@ export interface GameState {
   scenario: Scenario | null;
   isPaused: boolean;
   gameOver: boolean;
+  actionsUsedThisTurn: string[];
 }
