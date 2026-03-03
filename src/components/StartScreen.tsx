@@ -2,6 +2,51 @@ import React, { useState } from 'react';
 import type { Scenario } from '../game/types';
 import { SCENARIOS } from '../game/constants';
 
+const SCENARIO_META: Record<string, { difficulty: string; difficultyColor: string; challenge: string; tips: string }> = {
+  modern_democracy: {
+    difficulty: "★☆☆ 入門",
+    difficultyColor: "#53d769",
+    challenge: "安定した民主国家の持続的発展",
+    tips: "バランスの取れた政策運営を心がけよう。まずは制度の採用から始めるのがおすすめ。",
+  },
+  emerging_nation: {
+    difficulty: "★★☆ 中級",
+    difficultyColor: "#ffcc00",
+    challenge: "急速な近代化と政治的安定の両立",
+    tips: "インフレと失業率の制御が鍵。教育・インフラ投資で長期成長の基盤を築こう。",
+  },
+  ancient_empire: {
+    difficulty: "★★★ 上級",
+    difficultyColor: "#e94560",
+    challenge: "限られた制度で広大な帝国を維持",
+    tips: "軍事費と安定度のバランスが生命線。制度の段階的な導入で近代化を目指そう。",
+  },
+  reform_crisis: {
+    difficulty: "★★★ 上級",
+    difficultyColor: "#e94560",
+    challenge: "体制崩壊後の経済危機と政治混乱の克服",
+    tips: "まず財政の安定化を優先。急激な改革は避け、段階的な制度構築を。",
+  },
+  meiji_restoration: {
+    difficulty: "★★☆ 中級",
+    difficultyColor: "#ffcc00",
+    challenge: "封建体制から近代国家への大転換",
+    tips: "教育と軍事の近代化を同時に進めよう。制度の前提条件に注目。",
+  },
+  military_to_democracy: {
+    difficulty: "★★☆ 中級",
+    difficultyColor: "#ffcc00",
+    challenge: "軍部の抵抗を抑えつつ民主化を実現",
+    tips: "軍部の満足度に注意しつつ、段階的に民主的制度を導入しよう。",
+  },
+  superpower_decline: {
+    difficulty: "★★★ 上級",
+    difficultyColor: "#e94560",
+    challenge: "肥大化した超大国の改革と再生",
+    tips: "軍事費の段階的削減と研究投資の拡大がポイント。急激な改革は不安定化を招く。",
+  },
+};
+
 interface StartScreenProps {
   onStart: (scenario: Scenario) => void;
 }
@@ -24,20 +69,46 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart }) => {
 
       <h2 style={styles.sectionTitle}>シナリオを選択</h2>
       <div style={styles.cardGrid}>
-        {SCENARIOS.map((scenario) => (
-          <div
-            key={scenario.id}
-            style={{
-              ...styles.card,
-              ...(selected === scenario.id ? styles.cardSelected : {}),
-            }}
-            onClick={() => setSelected(scenario.id)}
-          >
-            <h3 style={styles.cardTitle}>{scenario.name}</h3>
-            <p style={styles.cardDesc}>{scenario.description}</p>
-            <span style={styles.cardYear}>開始年: {scenario.startYear}年</span>
-          </div>
-        ))}
+        {SCENARIOS.map((scenario) => {
+          const meta = SCENARIO_META[scenario.id];
+          return (
+            <div
+              key={scenario.id}
+              style={{
+                ...styles.card,
+                ...(selected === scenario.id ? styles.cardSelected : {}),
+              }}
+              onClick={() => setSelected(scenario.id)}
+            >
+              <h3 style={styles.cardTitle}>{scenario.name}</h3>
+              <p style={styles.cardDesc}>{scenario.description}</p>
+              <span style={styles.cardYear}>開始年: {scenario.startYear}年</span>
+              {meta && (
+                <>
+                  <div style={{ fontSize: 11, color: meta.difficultyColor, fontWeight: 'bold', marginTop: 8 }}>
+                    難易度: {meta.difficulty}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>
+                    挑戦: {meta.challenge}
+                  </div>
+                  {selected === scenario.id && (
+                    <div style={{
+                      fontSize: 11,
+                      color: '#4a9eff',
+                      marginTop: 6,
+                      padding: '6px 8px',
+                      background: 'rgba(74,158,255,0.08)',
+                      borderRadius: 4,
+                      lineHeight: 1.4,
+                    }}>
+                      💡 {meta.tips}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <button
