@@ -63,6 +63,11 @@ const EconomyPanel: React.FC<EconomyPanelProps> = ({ economic }) => {
       badge: getBadge(economic.debtToGdpRatio, 60, 100, true),
     },
     {
+      label: '財政収支',
+      value: `${economic.fiscalBalance >= 0 ? '+' : ''}${formatNum(economic.fiscalBalance)} (GDP比 ${((economic.fiscalBalance / (economic.gdp || 1)) * 100).toFixed(1)}%)`,
+      badge: getBadge(economic.fiscalBalance, 0, -50),
+    },
+    {
       label: '貿易収支',
       value: formatNum(economic.tradeBalance),
       badge: getBadge(economic.tradeBalance, 0, -10),
@@ -74,9 +79,22 @@ const EconomyPanel: React.FC<EconomyPanelProps> = ({ economic }) => {
     },
   ];
 
+  // War economy badge
+  const warEconomyBadge = economic.isWarEconomy ? {
+    label: '総力戦経済',
+    value: `国防費 GDP比 ${economic.governmentSpending.defense.toFixed(1)}%`,
+    badge: 'danger' as BadgeLevel,
+  } : null;
+
   return (
     <div style={styles.panel}>
       <h3 style={styles.title}>経済指標</h3>
+      {warEconomyBadge && (
+        <div style={styles.warBanner}>
+          <span style={styles.warIcon}>!</span>
+          {warEconomyBadge.label}: {warEconomyBadge.value}
+        </div>
+      )}
       <div style={styles.grid}>
         {indicators.map((ind) => (
           <div key={ind.label} style={styles.item}>
@@ -110,6 +128,32 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
     paddingBottom: 8,
+  },
+  warBanner: {
+    background: 'rgba(233,69,96,0.15)',
+    border: '1px solid #e94560',
+    borderRadius: 6,
+    padding: '6px 10px',
+    marginBottom: 10,
+    fontSize: 12,
+    color: '#e94560',
+    fontWeight: 'bold',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  warIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 18,
+    height: 18,
+    borderRadius: '50%',
+    background: '#e94560',
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
+    flexShrink: 0,
   },
   grid: {
     display: 'grid',

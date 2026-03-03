@@ -142,7 +142,11 @@ function App() {
         <div style={styles.contentArea}>
           {activeTab === 'economy' && <EconomyPanel economic={gameState.economic} />}
           {activeTab === 'policy' && (
-            <PolicyPanel economic={gameState.economic} onApplyPolicy={handleApplyPolicy} />
+            <PolicyPanel
+              economic={gameState.economic}
+              actionsUsedThisTurn={gameState.actionsUsedThisTurn}
+              onApplyPolicy={handleApplyPolicy}
+            />
           )}
           {activeTab === 'institutions' && (
             <InstitutionPanel
