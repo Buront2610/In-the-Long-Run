@@ -13,6 +13,7 @@ import TipPopup from './components/TipPopup';
 import EventDialog from './components/EventDialog';
 import GameOverScreen from './components/GameOverScreen';
 import WorldMap from './components/WorldMap';
+import TurnSummary from './components/TurnSummary';
 
 type ActiveTab = 'economy' | 'policy' | 'institutions' | 'groups' | 'history' | 'map';
 
@@ -21,6 +22,7 @@ function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('economy');
   const [showTips, setShowTips] = useState(true);
+  const [showSummary, setShowSummary] = useState(false);
 
   const handleStart = useCallback((scenario: Scenario) => {
     const e = new GameEngine(scenario);
@@ -35,6 +37,7 @@ function App() {
     const newState = engine.nextTurn();
     setGameState({ ...newState });
     setShowTips(true);
+    setShowSummary(true);
   }, [engine]);
 
   const handleApplyPolicy = useCallback((action: string, value: number) => {
@@ -187,6 +190,10 @@ function App() {
       {/* Tips Popup */}
       {showTips && (
         <TipPopup tips={gameState.tips} onDismiss={() => setShowTips(false)} />
+      )}
+
+      {showSummary && gameState.history.length >= 2 && (
+        <TurnSummary state={gameState} onDismiss={() => setShowSummary(false)} />
       )}
     </div>
   );
