@@ -177,7 +177,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
       </div>
 
       {/* ── War Economy Warning ── */}
-      {sp.defense >= WAR_ECONOMY_THRESHOLD && (
+      {sp.defense > WAR_ECONOMY_THRESHOLD && (
         <div style={styles.warWarning}>
           総力戦経済モード: 国防費GDP比{sp.defense.toFixed(1)}% (閾値: {WAR_ECONOMY_THRESHOLD}%)
           <br />
