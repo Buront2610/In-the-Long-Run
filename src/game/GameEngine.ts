@@ -95,7 +95,7 @@ export class GameEngine {
   // ── Public API ──────────────────────────────────────────────────────────
 
   getState(): GameState {
-    return this.state;
+    return structuredClone(this.state);
   }
 
   nextTurn(): GameState {
@@ -275,6 +275,7 @@ export class GameEngine {
     for (const [key, value] of Object.entries(inst.effects)) {
       this.applyEffect(key, value);
     }
+    this.syncDebtToGdpRatio();
 
     this.addNewsItem(
       `制度「${inst.name}」が採用されました。（費用: ${inst.adoptionCost}、安定度変化: ${inst.stabilityImpact}）`,
@@ -309,6 +310,7 @@ export class GameEngine {
     for (const [key, value] of Object.entries(inst.effects)) {
       this.applyEffect(key, -value);
     }
+    this.syncDebtToGdpRatio();
 
     // Revoking causes instability and unrest
     s.political.stability = clamp(s.political.stability - 5, 0, 100);
@@ -399,6 +401,7 @@ export class GameEngine {
           if (other.id !== nationId) {
             if (other.opinion < 0) {
               other.opinion = clamp(other.opinion + 5, -100, 100);
+              this.updateDiplomaticStatus(other);
             }
           }
         }
@@ -445,6 +448,7 @@ export class GameEngine {
     for (const [key, value] of Object.entries(choice.effects)) {
       this.applyEffect(key, value as number);
     }
+    this.syncDebtToGdpRatio();
 
     this.addNewsItem(
       `${event.title}: ${choice.text}`,
@@ -452,6 +456,7 @@ export class GameEngine {
     );
 
     this.state.activeEvents.splice(eventIndex, 1);
+    this.checkGameOver();
   }
 
   updateInterestGroups(): void {
@@ -590,7 +595,8 @@ export class GameEngine {
       econ.debt += Math.abs(econ.treasury);
       econ.treasury = 0;
     } else if (fiscalBalance > 0) {
-      const debtRepayment = Math.min(fiscalBalance * 0.5, econ.debt);
+      const debtRepayment = Math.min(fiscalBalance * 0.5, econ.debt, econ.treasury);
+      econ.treasury -= debtRepayment;
       econ.debt = Math.max(0, econ.debt - debtRepayment);
     }
 
@@ -861,6 +867,11 @@ export class GameEngine {
         );
         break;
     }
+  }
+
+  private syncDebtToGdpRatio(): void {
+    const econ = this.state.economic;
+    econ.debtToGdpRatio = econ.gdp > 0 ? (econ.debt / econ.gdp) * 100 : 0;
   }
 
   private recordHistory(): void {
