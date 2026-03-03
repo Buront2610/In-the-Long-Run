@@ -368,5 +368,5 @@ for (const testCase of cases) {
 }
 
 if (failures > 0) {
-  process.exit(1);
+  throw new Error(`${failures} test(s) failed`);
 }
