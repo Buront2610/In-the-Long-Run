@@ -164,14 +164,14 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
             }} />
           </div>
         </div>
-        {totalSpendingRate <= economic.taxRate && (
+        {!isDeficit && (
           <div style={styles.surplusNote}>
-            財政余裕: +{(economic.taxRate - totalSpendingRate).toFixed(1)}% of GDP
+            財政余裕: +{((fiscalBalance / economic.gdp) * 100).toFixed(1)}% of GDP
           </div>
         )}
-        {totalSpendingRate > economic.taxRate && (
+        {isDeficit && (
           <div style={styles.deficitNote}>
-            財政赤字: -{(totalSpendingRate - economic.taxRate).toFixed(1)}% of GDP
+            財政赤字: {((fiscalBalance / economic.gdp) * 100).toFixed(1)}% of GDP
           </div>
         )}
       </div>
