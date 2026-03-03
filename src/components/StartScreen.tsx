@@ -2,7 +2,14 @@ import React, { useState } from 'react';
 import type { Scenario } from '../game/types';
 import { SCENARIOS } from '../game/constants';
 
-const SCENARIO_META: Record<string, { difficulty: string; difficultyColor: string; challenge: string; tips: string }> = {
+interface ScenarioMeta {
+  difficulty: string;
+  difficultyColor: string;
+  challenge: string;
+  tips: string;
+}
+
+const SCENARIO_META: Record<string, ScenarioMeta> = {
   modern_democracy: {
     difficulty: "★☆☆ 入門",
     difficultyColor: "#53d769",
