@@ -80,9 +80,9 @@ const TurnSummary: React.FC<TurnSummaryProps> = ({ state, onDismiss }) => {
 
         <div style={styles.changes}>
           <div style={styles.changeRow}>
-            <span style={styles.changeLabel}>GDP成長率</span>
+            <span style={styles.changeLabel}>GDP成長</span>
             <span style={styles.changeValue}>
-              {state.economic.gdpGrowth.toFixed(1)}% {formatChange(curr.gdp, prev.gdp)}
+              {state.economic.gdpGrowth >= 0 ? '+' : ''}{state.economic.gdpGrowth.toFixed(1)}% {formatChange(curr.gdp, prev.gdp)}
             </span>
           </div>
           <div style={styles.changeRow}>
