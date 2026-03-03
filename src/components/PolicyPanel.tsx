@@ -32,7 +32,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
   const totalSpendingRate = sp.defense + sp.education + sp.infrastructure + sp.welfare + sp.research;
   const revenue = (economic.taxRate / 100) * economic.gdp;
   const spending = (totalSpendingRate / 100) * economic.gdp;
-  const interestPayment = economic.debt * 0.02; // approximate display
+  const interestPayment = economic.primaryBalance - economic.fiscalBalance;
   const fiscalBalance = economic.fiscalBalance;
   const isDeficit = fiscalBalance < 0;
 
