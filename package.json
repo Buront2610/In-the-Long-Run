@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npx tsc -p tsconfig.test.json && node -e \"require('fs').writeFileSync('.tmp-tests/package.json', '{\\\"type\\\":\\\"commonjs\\\"}\\n')\" && node .tmp-tests/tests/gameEngine.test.js"
   },
   "dependencies": {
     "@fontsource/noto-sans-jp": "^5.2.9",
