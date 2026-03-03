@@ -1,5 +1,5 @@
 import React from 'react';
-import type { InterestGroup, InterestGroupType } from '../game/types';
+import type { InterestGroup } from '../game/types';
 
 const GROUP_DESCRIPTIONS: Record<string, { desc: string; effect: string }> = {
   aristocracy: {
