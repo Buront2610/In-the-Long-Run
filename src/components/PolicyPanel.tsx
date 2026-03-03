@@ -19,8 +19,6 @@ const spendingCategories: {
   { key: 'research', label: '研究', max: 20 },
 ];
 
-const WAR_ECONOMY_THRESHOLD = 15;
-
 function formatNum(n: number, decimals = 0): string {
   if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'K';
