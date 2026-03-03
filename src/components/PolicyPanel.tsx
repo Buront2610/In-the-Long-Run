@@ -1,5 +1,6 @@
 import React from 'react';
 import type { EconomicState } from '../game/types';
+import { WAR_ECONOMY_THRESHOLD } from '../game/constants';
 
 interface PolicyPanelProps {
   economic: EconomicState;

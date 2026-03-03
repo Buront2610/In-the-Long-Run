@@ -15,6 +15,7 @@ import {
   INITIAL_INTEREST_GROUPS,
   INITIAL_FOREIGN_NATIONS,
   GOVERNMENT_TYPE_LABELS,
+  WAR_ECONOMY_THRESHOLD,
   getEraForYear,
 } from "./constants";
 import { generateRandomEvent } from "./events";
@@ -46,7 +47,6 @@ function deepCopyForeignNations(src: ForeignNation[]): ForeignNation[] {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const WAR_ECONOMY_THRESHOLD = 15; // defense GDP比% で総力戦経済発動
 const NAIRU = 5.0;
 
 // ── Game Engine ─────────────────────────────────────────────────────────────
