@@ -12,12 +12,13 @@ const spendingCategories: {
   key: keyof EconomicState['governmentSpending'];
   label: string;
   max: number;
+  desc: string;
 }[] = [
-  { key: 'defense', label: '国防', max: 50 },
-  { key: 'education', label: '教育', max: 30 },
-  { key: 'infrastructure', label: 'インフラ', max: 30 },
-  { key: 'welfare', label: '福祉', max: 30 },
-  { key: 'research', label: '研究', max: 20 },
+  { key: 'defense', label: '国防', max: 50, desc: '軍事費。4%以上で軍部満足。15%超で総力戦経済に突入。高すぎると民間経済を圧迫。' },
+  { key: 'education', label: '教育', max: 30, desc: '人的資本への投資。長期的なGDP成長率と官僚効率を向上。知識人の満足度に影響。' },
+  { key: 'infrastructure', label: 'インフラ', max: 30, desc: '道路・通信等の社会基盤整備。GDP成長率を直接押し上げる最も即効性のある支出。' },
+  { key: 'welfare', label: '福祉', max: 30, desc: '社会保障・医療等。不満を抑制し安定度を向上。12%以上で労働者層が満足。' },
+  { key: 'research', label: '研究', max: 20, desc: '科学技術への投資。長期的な成長エンジン。教育と合わせてGDP比8%以上が知識人の要望。' },
 ];
 
 function formatNum(n: number, decimals = 0): string {
@@ -103,6 +104,9 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
           onChange={(e) => onApplyPolicy('tax_rate', Number(e.target.value))}
           style={styles.slider}
         />
+        <div style={styles.descText}>
+          税率は歳入の源泉。高すぎるとラッファー曲線により成長率が低下。50%超は特に深刻。低すぎると歳入不足に。
+        </div>
       </div>
 
       <div style={styles.divider} />
@@ -120,7 +124,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
         </span>
       </div>
 
-      {spendingCategories.map(({ key, label, max }) => {
+      {spendingCategories.map(({ key, label, max, desc }) => {
         const val = sp[key];
         const actualAmount = (val / 100) * economic.gdp;
         return (
@@ -141,6 +145,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
               onChange={(e) => onApplyPolicy(`spending_${key}`, Number(e.target.value))}
               style={styles.slider}
             />
+            <div style={styles.descText}>{desc}</div>
           </div>
         );
       })}
@@ -410,6 +415,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 10,
     fontWeight: 'normal',
     color: '#888',
+  },
+  descText: {
+    fontSize: 10,
+    color: '#777',
+    marginBottom: 6,
+    lineHeight: 1.3,
+    paddingLeft: 2,
   },
 };
 
