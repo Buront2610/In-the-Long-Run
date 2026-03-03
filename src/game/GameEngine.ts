@@ -44,10 +44,16 @@ function deepCopyForeignNations(src: ForeignNation[]): ForeignNation[] {
   return src.map((fn) => ({ ...fn }));
 }
 
+// ── Constants ───────────────────────────────────────────────────────────────
+
+const WAR_ECONOMY_THRESHOLD = 15; // defense GDP比% で総力戦経済発動
+const NAIRU = 5.0;
+
 // ── Game Engine ─────────────────────────────────────────────────────────────
 
 export class GameEngine {
   private state: GameState;
+  private previousDefenseRate: number;
 
   constructor(scenario: Scenario | null = null) {
     const startYear = scenario?.startYear ?? 2000;
@@ -80,7 +86,10 @@ export class GameEngine {
       scenario: scenario,
       isPaused: false,
       gameOver: false,
+      actionsUsedThisTurn: [],
     };
+
+    this.previousDefenseRate = this.state.economic.governmentSpending.defense;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────
@@ -95,6 +104,9 @@ export class GameEngine {
     }
 
     const s = this.state;
+
+    // Reset per-turn action limits
+    s.actionsUsedThisTurn = [];
 
     // Phase 1: Record current state
     this.recordHistory();
@@ -119,7 +131,6 @@ export class GameEngine {
       s.political.yearsSinceElection += 1;
       if (s.political.yearsSinceElection >= s.political.electionCycle) {
         s.political.yearsSinceElection = 0;
-        // Election outcome depends on economic and political conditions
         const approvalBonus = s.economic.gdpGrowth > 2 ? 3 : s.economic.gdpGrowth > 0 ? 1 : -5;
         const unrestPenalty = s.political.unrest > 50 ? -5 : s.political.unrest > 30 ? -2 : 0;
         s.political.legitimacy = clamp(
@@ -153,6 +164,9 @@ export class GameEngine {
     // Check game over conditions
     this.checkGameOver();
 
+    // Track defense rate for demobilization shock next turn
+    this.previousDefenseRate = s.economic.governmentSpending.defense;
+
     return this.state;
   }
 
@@ -161,24 +175,32 @@ export class GameEngine {
 
     switch (action) {
       case "tax_rate":
-        s.economic.taxRate = clamp(value, 0, 100);
+        s.economic.taxRate = clamp(value, 0, 60);
         break;
       case "spending_defense":
-        s.economic.governmentSpending.defense = clamp(value, 0, 100);
+        s.economic.governmentSpending.defense = clamp(value, 0, 50);
         break;
       case "spending_education":
-        s.economic.governmentSpending.education = clamp(value, 0, 100);
+        s.economic.governmentSpending.education = clamp(value, 0, 30);
         break;
       case "spending_infrastructure":
-        s.economic.governmentSpending.infrastructure = clamp(value, 0, 100);
+        s.economic.governmentSpending.infrastructure = clamp(value, 0, 30);
         break;
       case "spending_welfare":
-        s.economic.governmentSpending.welfare = clamp(value, 0, 100);
+        s.economic.governmentSpending.welfare = clamp(value, 0, 30);
         break;
       case "spending_research":
-        s.economic.governmentSpending.research = clamp(value, 0, 100);
+        s.economic.governmentSpending.research = clamp(value, 0, 20);
         break;
       case "anti_corruption": {
+        if (s.actionsUsedThisTurn.includes("anti_corruption")) {
+          this.addNewsItem("反腐敗キャンペーンは今期既に実施済みです。", NewsType.POLITICAL);
+          return;
+        }
+        if (s.economic.treasury < 10) {
+          this.addNewsItem("反腐敗キャンペーンのための資金が不足しています。", NewsType.POLITICAL);
+          return;
+        }
         const reduction = clamp(value, 0, 20);
         s.political.corruption = clamp(
           s.political.corruption - reduction,
@@ -187,14 +209,22 @@ export class GameEngine {
         );
         s.political.stability = clamp(s.political.stability - 3, 0, 100);
         s.economic.treasury -= 10;
+        s.actionsUsedThisTurn.push("anti_corruption");
         this.addNewsItem("反腐敗キャンペーンが実施されました。", NewsType.POLITICAL);
         break;
       }
       case "promote_trade": {
-        const boost = clamp(value, 0, 20);
-        s.economic.tradeBalance += boost;
-        s.economic.gdpGrowth += boost * 0.1;
+        if (s.actionsUsedThisTurn.includes("promote_trade")) {
+          this.addNewsItem("貿易促進政策は今期既に実施済みです。", NewsType.ECONOMIC);
+          return;
+        }
+        if (s.economic.treasury < 5) {
+          this.addNewsItem("貿易促進のための資金が不足しています。", NewsType.ECONOMIC);
+          return;
+        }
+        s.economic.tradeBalance += 3;
         s.economic.treasury -= 5;
+        s.actionsUsedThisTurn.push("promote_trade");
         this.addNewsItem("貿易促進政策が実施されました。", NewsType.ECONOMIC);
         break;
       }
@@ -330,7 +360,6 @@ export class GameEngine {
         nation.tradeAgreement = true;
         nation.opinion = clamp(nation.opinion + 10, -100, 100);
         s.economic.tradeBalance += 3;
-        s.economic.gdpGrowth += 0.2;
         this.updateDiplomaticStatus(nation);
         this.addNewsItem(
           `${nation.name}との貿易協定が締結されました。両国の交易が活発化します。`,
@@ -366,11 +395,9 @@ export class GameEngine {
         nation.opinion = clamp(nation.opinion - 25, -100, 100);
         this.updateDiplomaticStatus(nation);
         s.political.legitimacy = clamp(s.political.legitimacy + 2, 0, 100);
-        // Other nations notice
         for (const other of s.foreignNations) {
           if (other.id !== nationId) {
             if (other.opinion < 0) {
-              // Enemies of our enemy become friendlier
               other.opinion = clamp(other.opinion + 5, -100, 100);
             }
           }
@@ -415,7 +442,6 @@ export class GameEngine {
     const choice = event.choices[choiceIndex];
     if (!choice) return;
 
-    // Apply choice effects
     for (const [key, value] of Object.entries(choice.effects)) {
       this.applyEffect(key, value as number);
     }
@@ -425,7 +451,6 @@ export class GameEngine {
       NewsType.POLITICAL,
     );
 
-    // Remove the event from active events
     this.state.activeEvents.splice(eventIndex, 1);
   }
 
@@ -435,7 +460,6 @@ export class GameEngine {
     for (const ig of s.interestGroups) {
       switch (ig.type) {
         case "ARISTOCRACY":
-          // Aristocrats prefer low taxes and property rights
           ig.satisfaction = clamp(
             ig.satisfaction + (s.economic.taxRate < 25 ? 2 : -2),
             0,
@@ -443,16 +467,15 @@ export class GameEngine {
           );
           break;
         case "MILITARY":
-          // Military wants high defense spending
+          // 対GDP比4%以上で満足 (旧: 20%)
           ig.satisfaction = clamp(
             ig.satisfaction +
-              (s.economic.governmentSpending.defense > 20 ? 2 : -2),
+              (s.economic.governmentSpending.defense > 4 ? 2 : -2),
             0,
             100,
           );
           break;
         case "MERCHANTS":
-          // Merchants prefer free trade and low regulation
           ig.satisfaction = clamp(
             ig.satisfaction + (s.economic.tradeBalance > 0 ? 2 : -1),
             0,
@@ -460,17 +483,16 @@ export class GameEngine {
           );
           break;
         case "WORKERS":
-          // Workers want welfare spending and low unemployment
+          // 福祉GDP比12%以上で満足 (旧: 25%)
           ig.satisfaction = clamp(
             ig.satisfaction +
-              (s.economic.governmentSpending.welfare > 25 ? 2 : -2) +
+              (s.economic.governmentSpending.welfare > 12 ? 2 : -2) +
               (s.economic.unemployment < 8 ? 1 : -1),
             0,
             100,
           );
           break;
         case "FARMERS":
-          // Farmers prefer subsidies (welfare) and stable prices
           ig.satisfaction = clamp(
             ig.satisfaction + (s.economic.inflation < 5 ? 1 : -2),
             0,
@@ -478,12 +500,12 @@ export class GameEngine {
           );
           break;
         case "INTELLECTUALS":
-          // Intellectuals want education and research spending
+          // 教育+研究 GDP比8%以上で満足 (旧: 30%)
           ig.satisfaction = clamp(
             ig.satisfaction +
               (s.economic.governmentSpending.education +
                 s.economic.governmentSpending.research >
-              30
+              8
                 ? 2
                 : -2),
             0,
@@ -491,7 +513,6 @@ export class GameEngine {
           );
           break;
         case "BUREAUCRATS":
-          // Bureaucrats want budget growth and stability
           ig.satisfaction = clamp(
             ig.satisfaction + (s.political.stability > 50 ? 1 : -1),
             0,
@@ -518,7 +539,6 @@ export class GameEngine {
       type,
     };
     this.state.news.unshift(item);
-    // Keep only last 50 news items
     if (this.state.news.length > 50) {
       this.state.news.length = 50;
     }
@@ -530,67 +550,151 @@ export class GameEngine {
     const s = this.state;
     const econ = s.economic;
     const pol = s.political;
-
-    // ── Fiscal Policy ───────────────────────────────────────────────────
-    // Tax revenue
-    const taxRevenue = (econ.gdp * econ.taxRate) / 100;
-
-    // Spending categories are % of the government budget (tax revenue)
     const sp = econ.governmentSpending;
-    const totalSpendingPct =
-      sp.defense + sp.education + sp.infrastructure + sp.welfare + sp.research;
-    const totalSpending = (taxRevenue * totalSpendingPct) / 100;
 
-    // Interest payments on outstanding debt (effective rate: 2-8% depending on risk)
-    const riskPremium = econ.debtToGdpRatio > 100 ? 0.03 : econ.debtToGdpRatio > 60 ? 0.01 : 0;
-    const effectiveInterestRate = 0.02 + riskPremium + Math.max(0, econ.inflation - 2) * 0.005;
+    // ── Fiscal Policy (対GDP比モデル) ──────────────────────────────────
+    const totalSpendingRate =
+      sp.defense + sp.education + sp.infrastructure + sp.welfare + sp.research;
+    const totalRevenueRate = econ.taxRate;
+
+    const taxRevenue = (econ.gdp * totalRevenueRate) / 100;
+    const totalSpending = (econ.gdp * totalSpendingRate) / 100;
+
+    // Interest payments: graduated risk premium
+    const ratio = econ.debtToGdpRatio;
+    let riskPremium: number;
+    if (ratio < 60) {
+      riskPremium = 0;
+    } else if (ratio < 100) {
+      riskPremium = (ratio - 60) * 0.0002;
+    } else if (ratio < 200) {
+      riskPremium = 0.008 + (ratio - 100) * 0.0003;
+    } else {
+      riskPremium = 0.038 + (ratio - 200) * 0.0005;
+    }
+    const effectiveInterestRate = 0.02 + riskPremium + Math.max(0, econ.inflation - 2) * 0.003;
     const interestPayment = econ.debt * effectiveInterestRate;
 
-    // Budget balance (after interest)
-    const budgetBalance = taxRevenue - totalSpending - interestPayment;
-    econ.treasury += budgetBalance;
+    const primaryBalance = taxRevenue - totalSpending;
+    const fiscalBalance = primaryBalance - interestPayment;
+
+    // Update derived fiscal fields
+    econ.totalSpendingRate = totalSpendingRate;
+    econ.totalRevenueRate = totalRevenueRate;
+    econ.primaryBalance = primaryBalance;
+    econ.fiscalBalance = fiscalBalance;
+
+    // Apply fiscal balance to treasury/debt
+    econ.treasury += fiscalBalance;
     if (econ.treasury < 0) {
-      // Shortfall covered by borrowing
       econ.debt += Math.abs(econ.treasury);
       econ.treasury = 0;
-    } else if (budgetBalance > 0) {
-      // Surplus can pay down debt
-      const debtRepayment = Math.min(budgetBalance * 0.5, econ.debt);
+    } else if (fiscalBalance > 0) {
+      const debtRepayment = Math.min(fiscalBalance * 0.5, econ.debt);
       econ.debt = Math.max(0, econ.debt - debtRepayment);
     }
 
-    // ── GDP Growth ──────────────────────────────────────────────────────
-    // Spending efficiency bonus: actual spending amounts relative to GDP drive growth
-    const actualInfraSpend = (taxRevenue * sp.infrastructure) / 100;
-    const actualEduSpend = (taxRevenue * sp.education) / 100;
-    const actualResearchSpend = (taxRevenue * sp.research) / 100;
-    const spendingToGdpRatio = (actualInfraSpend + actualEduSpend + actualResearchSpend) / Math.max(1, econ.gdp);
-    const efficiencyBonus =
-      (pol.bureaucracyEfficiency / 100) * spendingToGdpRatio * 15;
+    // ── War Economy (総力戦経済) ──────────────────────────────────────
+    const isWarEconomy = sp.defense > WAR_ECONOMY_THRESHOLD;
+    const wasWarEconomy = econ.isWarEconomy;
+    econ.isWarEconomy = isWarEconomy;
 
-    // High corruption reduces growth efficiency
+    let warGrowthBoost = 0;
+    let warInflationPush = 0;
+    let warUnemploymentReduction = 0;
+    let civilianEfficiency = 1.0;
+
+    if (isWarEconomy) {
+      const warIntensity = sp.defense - WAR_ECONOMY_THRESHOLD;
+      warGrowthBoost = warIntensity * 0.3;
+      warInflationPush = warIntensity * 0.8;
+      warUnemploymentReduction = warIntensity * 0.8;
+      civilianEfficiency = Math.max(0.3, 1.0 - warIntensity * 0.05);
+
+      // War legitimacy/unrest based on external threats
+      const hasHostileNeighbor = s.foreignNations.some(
+        (n) => n.status === DiplomaticStatus.HOSTILE || n.status === DiplomaticStatus.WAR,
+      );
+      if (hasHostileNeighbor) {
+        pol.legitimacy = clamp(pol.legitimacy + 3, 0, 100);
+        pol.unrest = clamp(pol.unrest - 2, 0, 100);
+      } else {
+        pol.unrest = clamp(pol.unrest + 5, 0, 100);
+      }
+
+      if (!wasWarEconomy) {
+        this.addNewsItem(
+          "【総力戦経済】国防費がGDP比15%を超え、経済は戦時体制に移行しました。工場は軍需品の生産に切り替わり、徴兵が拡大しています。",
+          NewsType.ECONOMIC,
+        );
+      }
+    }
+
+    // Demobilization shock: rapid defense cuts after war economy
+    let demobilizationShock = 0;
+    if (wasWarEconomy && !isWarEconomy) {
+      const defenseDrop = this.previousDefenseRate - sp.defense;
+      if (defenseDrop > 5) {
+        demobilizationShock = defenseDrop * 0.3;
+        this.addNewsItem(
+          "【軍縮不況】急速な国防費削減により、軍需産業が崩壊し大量の復員兵が労働市場に溢れています。",
+          NewsType.ECONOMIC,
+        );
+      }
+    }
+
+    // ── GDP Growth ──────────────────────────────────────────────────────
+    // Spending efficiency (infrastructure, education, research → growth)
+    // Now spending is direct GDP%, so ratio is straightforward
+    const growthSpendingRate = (sp.infrastructure + sp.education + sp.research) * civilianEfficiency;
+    const efficiencyBonus = (pol.bureaucracyEfficiency / 100) * (growthSpendingRate / 100) * 15;
+
+    // Keynesian fiscal multiplier
+    let fiscalStimulus = 0;
+    const deficitRate = -fiscalBalance / Math.max(1, econ.gdp);
+    const outputGap = econ.unemployment - NAIRU;
+
+    if (fiscalBalance < 0) {
+      if (outputGap > 0) {
+        // Recession: deficit spending has multiplier effect
+        const multiplier = 1.0 + outputGap * 0.05;
+        fiscalStimulus = deficitRate * multiplier * 2.0;
+      }
+      // In boom, deficit is handled via inflation below
+    }
+
+    // Corruption drag
     const corruptionDrag = pol.corruption > 30 ? (pol.corruption - 30) * 0.02 : 0;
 
-    // High tax rates create diminishing returns (Laffer curve effect)
+    // Laffer curve: high tax rates reduce growth
     const taxDrag = econ.taxRate > 50 ? (econ.taxRate - 50) * 0.03 : 0;
 
-    // High debt-to-GDP creates drag on growth
-    const debtDrag = econ.debtToGdpRatio > 80 ? (econ.debtToGdpRatio - 80) * 0.01 : 0;
+    // Debt drag (crowding out)
+    const debtDrag = econ.debtToGdpRatio > 80 ? (econ.debtToGdpRatio - 80) * 0.005 : 0;
 
-    // Mean reversion: extreme growth rates naturally moderate
+    // Mean reversion
     const meanReversionTarget = 2.0;
-    const meanReversion = (meanReversionTarget - econ.gdpGrowth) * 0.1;
+    const meanReversion = (meanReversionTarget - econ.gdpGrowth) * 0.15;
 
-    const effectiveGrowth = econ.gdpGrowth + efficiencyBonus + meanReversion - corruptionDrag - taxDrag - debtDrag;
+    const effectiveGrowth =
+      econ.gdpGrowth +
+      efficiencyBonus +
+      fiscalStimulus +
+      warGrowthBoost +
+      meanReversion -
+      corruptionDrag -
+      taxDrag -
+      debtDrag -
+      demobilizationShock;
+
     econ.gdp = Math.max(1, econ.gdp * (1 + effectiveGrowth / 100));
 
-    // Update base GDP growth rate with natural drift
+    // Update base growth rate with stronger mean reversion
     econ.gdpGrowth = clamp(econ.gdpGrowth + meanReversion * 0.5, -20, 30);
 
     // ── Population ──────────────────────────────────────────────────────
-    // Population growth responds to economic conditions
-    const welfareEffect = (sp.welfare > 20 ? 0.1 : -0.05);
-    const prosperityEffect = econ.gdp / Math.max(1, econ.population) > 15 ? -0.1 : 0.05; // demographic transition
+    const welfareEffect = sp.welfare > 8 ? 0.1 : -0.05;
+    const prosperityEffect = econ.gdp / Math.max(1, econ.population) > 15 ? -0.1 : 0.05;
     econ.populationGrowth = clamp(
       econ.populationGrowth + welfareEffect + prosperityEffect,
       -2, 5,
@@ -600,52 +704,58 @@ export class GameEngine {
       econ.population * (1 + econ.populationGrowth / 100),
     );
 
-    // ── Inflation (NK Phillips Curve-inspired) ──────────────────────────
-    // π_t ≈ inertia + demand_pull + fiscal_push - central_bank_stabilization
+    // ── Inflation (NK Phillips Curve) ────────────────────────────────
     const hasCentralBank = s.institutions.some((i) => i.id === "central_bank" && i.adopted);
     const inflationTarget = 2.0;
     const inflationInertia = econ.inflation * 0.6;
     const demandPull = (effectiveGrowth - 2.0) * 0.3;
-    const fiscalPush = budgetBalance < 0 ? Math.abs(budgetBalance / Math.max(1, econ.gdp)) * 8 : 0;
+
+    // Fiscal push: deficit spending in boom → inflation
+    let fiscalInflationPush = 0;
+    if (fiscalBalance < 0 && outputGap <= 0) {
+      fiscalInflationPush = deficitRate * 3.0;
+    } else if (fiscalBalance < 0) {
+      fiscalInflationPush = deficitRate * 1.0; // Even in recession, some inflation
+    }
+
     const centralBankEffect = hasCentralBank ? (econ.inflation - inflationTarget) * 0.2 : 0;
 
     econ.inflation = clamp(
-      inflationInertia + demandPull + fiscalPush - centralBankEffect + (1 - 0.6) * inflationTarget,
+      inflationInertia + demandPull + fiscalInflationPush + warInflationPush - centralBankEffect + (1 - 0.6) * inflationTarget,
       -5,
       100,
     );
 
-    // ── Unemployment (Okun's Law with NAIRU) ────────────────────────────
-    const nairu = 5.0;
-    // Okun's law: 1% above-trend growth reduces unemployment by ~0.3%
+    // ── Unemployment (Okun's Law) ────────────────────────────────────
     const unemploymentChange = -(effectiveGrowth - 2.0) * 0.3;
-    // Natural tendency toward NAIRU (stronger pull to prevent 0% unemployment)
-    const nairuPull = (nairu - econ.unemployment) * 0.15;
-    econ.unemployment = clamp(econ.unemployment + unemploymentChange + nairuPull, 1, 50);
+    const nairuPull = (NAIRU - econ.unemployment) * 0.15;
+    econ.unemployment = clamp(
+      econ.unemployment + unemploymentChange + nairuPull - warUnemploymentReduction + demobilizationShock * 0.5,
+      1,
+      50,
+    );
 
-    // ── Inequality (Gini Coefficient) ───────────────────────────────────
-    // Growth without redistribution increases inequality
+    // ── Inequality (Gini) ───────────────────────────────────────────
     const growthInequalityPush = effectiveGrowth > 0 ? effectiveGrowth * 0.002 : 0;
-    // Progressive taxation and welfare reduce inequality
-    const redistributionEffect = (econ.taxRate > 30 ? 0.002 : 0) + (sp.welfare > 25 ? 0.003 : 0);
-    // Education reduces long-term inequality
-    const educationEquality = sp.education > 20 ? 0.001 : 0;
+    const redistributionEffect =
+      (econ.taxRate > 30 ? 0.002 : 0) +
+      (sp.welfare > 12 ? 0.003 : 0);
+    const educationEquality = sp.education > 5 ? 0.001 : 0;
     econ.giniCoefficient = clamp(
       econ.giniCoefficient + growthInequalityPush - redistributionEffect - educationEquality,
       0.2,
       0.8,
     );
 
-    // ── Corruption ──────────────────────────────────────────────────────
+    // ── Corruption ──────────────────────────────────────────────────
     const adoptedAntiCorruption = s.institutions.filter(
       (i) => i.adopted && i.effects.corruption && i.effects.corruption < 0,
     ).length;
     const corruptionDrift = adoptedAntiCorruption > 0 ? -0.5 : 0.3;
-    // High spending with low transparency breeds corruption
-    const spendingCorruption = totalSpendingPct > 90 && pol.bureaucracyEfficiency < 50 ? 0.5 : 0;
+    const spendingCorruption = totalSpendingRate > 45 && pol.bureaucracyEfficiency < 50 ? 0.5 : 0;
     pol.corruption = clamp(pol.corruption + corruptionDrift + spendingCorruption, 0, 100);
 
-    // ── Stability ───────────────────────────────────────────────────────
+    // ── Stability ───────────────────────────────────────────────────
     const stabilityDelta =
       (effectiveGrowth > 2 ? 1 : effectiveGrowth > 0 ? 0.5 : effectiveGrowth > -2 ? -0.5 : -2) +
       (pol.unrest > 70 ? -3 : pol.unrest > 50 ? -1.5 : pol.unrest > 30 ? -0.5 : 0.5) +
@@ -654,7 +764,7 @@ export class GameEngine {
       (econ.inflation > 15 ? -1.5 : econ.inflation > 8 ? -0.5 : 0);
     pol.stability = clamp(pol.stability + stabilityDelta, 0, 100);
 
-    // Unrest dynamics: high inequality and unemployment fuel unrest
+    // Unrest dynamics
     const unrestPush =
       (econ.giniCoefficient > 0.5 ? 1 : 0) +
       (econ.unemployment > 10 ? 1 : 0) +
@@ -662,11 +772,11 @@ export class GameEngine {
     const unrestDecay = pol.stability > 50 ? -1.5 : pol.stability > 30 ? -0.5 : 0;
     pol.unrest = clamp(pol.unrest + unrestPush + unrestDecay, 0, 100);
 
-    // ── Update Derived Values ───────────────────────────────────────────
+    // ── Update Derived Values ───────────────────────────────────────
     econ.debtToGdpRatio = econ.gdp > 0 ? (econ.debt / econ.gdp) * 100 : 0;
 
     // Generate fiscal news
-    if (budgetBalance < -econ.gdp * 0.05) {
+    if (fiscalBalance < -econ.gdp * 0.05) {
       this.addNewsItem("深刻な財政赤字が続いています。", NewsType.ECONOMIC);
     }
     if (econ.inflation > 10) {
@@ -676,11 +786,13 @@ export class GameEngine {
       this.addNewsItem("国債残高がGDPを超え、財政の持続可能性が懸念されています。", NewsType.ECONOMIC);
     }
 
-    // Clamp & round key values
+    // Round key values
     econ.treasury = Math.round(econ.treasury * 100) / 100;
     econ.gdp = Math.round(econ.gdp * 100) / 100;
     econ.population = Math.round(econ.population * 100) / 100;
     econ.debtToGdpRatio = Math.round(econ.debtToGdpRatio * 100) / 100;
+    econ.fiscalBalance = Math.round(econ.fiscalBalance * 100) / 100;
+    econ.primaryBalance = Math.round(econ.primaryBalance * 100) / 100;
     econ.giniCoefficient = clamp(
       Math.round(econ.giniCoefficient * 1000) / 1000,
       0,
@@ -693,7 +805,6 @@ export class GameEngine {
     const pol = this.state.political;
 
     switch (key) {
-      // Economic effects
       case "gdp":
         econ.gdp = Math.max(1, econ.gdp + delta);
         break;
@@ -713,7 +824,7 @@ export class GameEngine {
         econ.unemployment = clamp(econ.unemployment + delta, 0, 50);
         break;
       case "taxRate":
-        econ.taxRate = clamp(econ.taxRate + delta, 0, 100);
+        econ.taxRate = clamp(econ.taxRate + delta, 0, 60);
         break;
       case "debt":
         econ.debt = Math.max(0, econ.debt + delta);
@@ -730,7 +841,6 @@ export class GameEngine {
       case "treasury":
         econ.treasury += delta;
         break;
-      // Political effects
       case "legitimacy":
         pol.legitimacy = clamp(pol.legitimacy + delta, 0, 100);
         break;
@@ -772,10 +882,8 @@ export class GameEngine {
     const pol = s.political;
     const gt = pol.governmentType;
 
-    // Revolution: extreme unrest can overthrow the government
     if (pol.unrest > 80 && pol.stability < 20 && Math.random() < 0.3) {
       if (gt === GovernmentType.ABSOLUTE_MONARCHY || gt === GovernmentType.MONARCHY || gt === GovernmentType.FEUDAL_MONARCHY) {
-        // Monarchy overthrown → republic or military junta
         if (pol.legitimacy > 30) {
           this.transitionGovernment(GovernmentType.REPUBLIC,
             "大規模な市民蜂起により王制が打倒されました。市民は共和制の樹立を宣言し、新たな時代の幕が開きました。「旧体制（アンシャン・レジーム）は終わった」の声が街頭に響いています。");
@@ -792,7 +900,6 @@ export class GameEngine {
       }
     }
 
-    // Military coup: military dissatisfaction + instability
     const militaryGroup = s.interestGroups.find((ig) => ig.type === "MILITARY");
     if (
       militaryGroup &&
@@ -806,7 +913,6 @@ export class GameEngine {
       return;
     }
 
-    // Democratization pressure: high legitimacy + education + low corruption
     if (
       pol.legitimacy > 70 &&
       pol.corruption < 40 &&
@@ -819,7 +925,6 @@ export class GameEngine {
       return;
     }
 
-    // Constitutional monarchy: absolute monarchy under pressure
     if (
       gt === GovernmentType.ABSOLUTE_MONARCHY &&
       pol.unrest > 50 &&
@@ -831,7 +936,6 @@ export class GameEngine {
       return;
     }
 
-    // Military junta → democratization or one-party
     if (gt === GovernmentType.MILITARY_JUNTA && pol.stability > 60 && Math.random() < 0.08) {
       if (pol.legitimacy > 50) {
         this.transitionGovernment(GovernmentType.PARLIAMENTARY_DEMOCRACY,
@@ -849,12 +953,10 @@ export class GameEngine {
     const oldType = s.political.governmentType;
     s.political.governmentType = newType;
 
-    // Transition effects
     s.political.stability = clamp(s.political.stability - 15, 0, 100);
     s.political.unrest = clamp(s.political.unrest - 10, 0, 100);
     s.political.yearsSinceElection = 0;
 
-    // Set election cycle based on new type
     switch (newType) {
       case GovernmentType.PARLIAMENTARY_DEMOCRACY:
       case GovernmentType.REPUBLIC:
@@ -893,24 +995,20 @@ export class GameEngine {
     const s = this.state;
 
     for (const nation of s.foreignNations) {
-      // Opinions drift toward 0 over time
       if (nation.opinion > 0) {
         nation.opinion = clamp(nation.opinion - 1, -100, 100);
       } else if (nation.opinion < 0) {
         nation.opinion = clamp(nation.opinion + 1, -100, 100);
       }
 
-      // Similar government types improve relations
       if (nation.governmentType === s.political.governmentType) {
         nation.opinion = clamp(nation.opinion + 1, -100, 100);
       }
 
-      // Trade agreements boost economy and maintain goodwill
       if (nation.tradeAgreement) {
         nation.opinion = clamp(nation.opinion + 1, -100, 100);
       }
 
-      // Hostile nations may cause diplomatic incidents
       if (nation.status === DiplomaticStatus.HOSTILE && Math.random() < 0.1) {
         s.political.stability = clamp(s.political.stability - 2, 0, 100);
         this.addNewsItem(
@@ -919,7 +1017,6 @@ export class GameEngine {
         );
       }
 
-      // Alliance provides stability bonus
       if (nation.alliance) {
         s.political.stability = clamp(s.political.stability + 0.5, 0, 100);
       }
@@ -927,10 +1024,12 @@ export class GameEngine {
       this.updateDiplomaticStatus(nation);
     }
 
-    // Trade agreement benefits
+    // Trade agreement benefits: fixed bonus per partner (no stacking on gdpGrowth)
     const tradePartners = s.foreignNations.filter((n) => n.tradeAgreement).length;
     if (tradePartners > 0) {
-      s.economic.gdpGrowth += tradePartners * 0.05;
+      // Small GDP boost proportional to partners, applied to GDP directly (not growth rate)
+      const tradeBoost = tradePartners * 0.001 * s.economic.gdp;
+      s.economic.gdp += tradeBoost;
     }
   }
 
