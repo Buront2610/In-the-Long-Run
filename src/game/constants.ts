@@ -43,6 +43,8 @@ export const DEFAULT_ECONOMIC_STATE: EconomicState = {
   isWarEconomy: false,
 };
 
+export const WAR_ECONOMY_THRESHOLD = 15;
+
 // ── Default Political State ─────────────────────────────────────────────────
 
 export const DEFAULT_POLITICAL_STATE: PoliticalState = {
