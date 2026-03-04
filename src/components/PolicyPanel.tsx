@@ -1,24 +1,19 @@
 import React from 'react';
 import type { EconomicState } from '../game/types';
 import { WAR_ECONOMY_THRESHOLD } from '../game/constants';
+import {
+  SLIDER_POLICIES,
+  ACTION_POLICIES,
+  SPENDING_KEYS,
+  spendingFieldKey,
+  type SpendingPolicyKey,
+} from '../game/policies';
 
 interface PolicyPanelProps {
   economic: EconomicState;
   actionsUsedThisTurn: string[];
   onApplyPolicy: (action: string, value: number) => void;
 }
-
-const spendingCategories: {
-  key: keyof EconomicState['governmentSpending'];
-  label: string;
-  max: number;
-}[] = [
-  { key: 'defense', label: '国防', max: 50 },
-  { key: 'education', label: '教育', max: 30 },
-  { key: 'infrastructure', label: 'インフラ', max: 30 },
-  { key: 'welfare', label: '福祉', max: 30 },
-  { key: 'research', label: '研究', max: 20 },
-];
 
 function formatNum(n: number, decimals = 0): string {
   if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -35,8 +30,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
   const fiscalBalance = economic.fiscalBalance;
   const isDeficit = fiscalBalance < 0;
 
-  const antiCorruptionUsed = actionsUsedThisTurn.includes('anti_corruption');
-  const promoteTradeUsed = actionsUsedThisTurn.includes('promote_trade');
+  const actionEntries = Object.entries(ACTION_POLICIES) as [string, typeof ACTION_POLICIES[keyof typeof ACTION_POLICIES]][];
 
   // Revenue vs spending bar widths (relative to max of 60%)
   const barMax = 60;
@@ -91,14 +85,14 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
       {/* ── Tax Rate ── */}
       <div style={styles.section}>
         <div style={styles.sliderHeader}>
-          <span style={styles.label}>税率</span>
+          <span style={styles.label}>{SLIDER_POLICIES.tax_rate.label}</span>
           <span style={styles.value}>{economic.taxRate}%</span>
         </div>
         <input
           type="range"
-          min={0}
-          max={60}
-          step={1}
+          min={SLIDER_POLICIES.tax_rate.min}
+          max={SLIDER_POLICIES.tax_rate.max}
+          step={SLIDER_POLICIES.tax_rate.step}
           value={economic.taxRate}
           onChange={(e) => onApplyPolicy('tax_rate', Number(e.target.value))}
           style={styles.slider}
@@ -120,13 +114,15 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
         </span>
       </div>
 
-      {spendingCategories.map(({ key, label, max }) => {
-        const val = sp[key];
+      {SPENDING_KEYS.map((policyKey) => {
+        const def = SLIDER_POLICIES[policyKey];
+        const fieldKey = spendingFieldKey(policyKey as SpendingPolicyKey);
+        const val = sp[fieldKey];
         const actualAmount = (val / 100) * economic.gdp;
         return (
-          <div key={key} style={styles.section}>
+          <div key={policyKey} style={styles.section}>
             <div style={styles.sliderHeader}>
-              <span style={styles.label}>{label}</span>
+              <span style={styles.label}>{def.label}</span>
               <span style={styles.value}>
                 {val.toFixed(1)}%
                 <span style={styles.actualAmount}> ({formatNum(actualAmount)})</span>
@@ -134,11 +130,11 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
             </div>
             <input
               type="range"
-              min={0}
-              max={max}
-              step={0.5}
+              min={def.min}
+              max={def.max}
+              step={def.step}
               value={val}
-              onChange={(e) => onApplyPolicy(`spending_${key}`, Number(e.target.value))}
+              onChange={(e) => onApplyPolicy(policyKey, Number(e.target.value))}
               style={styles.slider}
             />
           </div>
@@ -199,28 +195,23 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
         <span style={styles.actionNote}>ターン内1回のみ</span>
       </div>
       <div style={styles.actions}>
-        <button
-          style={{
-            ...styles.actionButton,
-            ...(antiCorruptionUsed ? styles.actionButtonDisabled : {}),
-          }}
-          disabled={antiCorruptionUsed}
-          onClick={() => onApplyPolicy('anti_corruption', 10)}
-        >
-          反腐敗キャンペーン
-          {antiCorruptionUsed && <span style={styles.usedBadge}> (実施済)</span>}
-        </button>
-        <button
-          style={{
-            ...styles.actionButton,
-            ...(promoteTradeUsed ? styles.actionButtonDisabled : {}),
-          }}
-          disabled={promoteTradeUsed}
-          onClick={() => onApplyPolicy('promote_trade', 5)}
-        >
-          貿易促進
-          {promoteTradeUsed && <span style={styles.usedBadge}> (実施済)</span>}
-        </button>
+        {actionEntries.map(([key, def]) => {
+          const used = actionsUsedThisTurn.includes(key);
+          return (
+            <button
+              key={key}
+              style={{
+                ...styles.actionButton,
+                ...(used ? styles.actionButtonDisabled : {}),
+              }}
+              disabled={used}
+              onClick={() => onApplyPolicy(key, def.cost)}
+            >
+              {def.label}
+              {used && <span style={styles.usedBadge}> (実施済)</span>}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
