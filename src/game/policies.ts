@@ -29,6 +29,7 @@ export interface SliderPolicyDef {
   max: number;
   step: number;
   label: string;
+  desc: string;
   apply: (state: GameState, value: number) => void;
 }
 
@@ -56,6 +57,7 @@ export const SLIDER_POLICIES: Record<SliderPolicyKey, SliderPolicyDef> = {
     max: 60,
     step: 1,
     label: "税率",
+    desc: "税率は歳入の源泉。高すぎるとラッファー曲線により成長率が低下。50%超は特に深刻。低すぎると歳入不足に。",
     apply: (s, v) => {
       s.economic.taxRate = clamp(v, 0, 60);
     },
@@ -66,6 +68,7 @@ export const SLIDER_POLICIES: Record<SliderPolicyKey, SliderPolicyDef> = {
     max: 50,
     step: 0.5,
     label: "国防",
+    desc: "軍事費。4%以上で軍部満足。15%超で総力戦経済に突入。高すぎると民間経済を圧迫。",
     apply: (s, v) => {
       s.economic.governmentSpending.defense = clamp(v, 0, 50);
     },
@@ -76,6 +79,7 @@ export const SLIDER_POLICIES: Record<SliderPolicyKey, SliderPolicyDef> = {
     max: 30,
     step: 0.5,
     label: "教育",
+    desc: "人的資本への投資。長期的なGDP成長率と官僚効率を向上。知識人の満足度に影響。",
     apply: (s, v) => {
       s.economic.governmentSpending.education = clamp(v, 0, 30);
     },
@@ -86,6 +90,7 @@ export const SLIDER_POLICIES: Record<SliderPolicyKey, SliderPolicyDef> = {
     max: 30,
     step: 0.5,
     label: "インフラ",
+    desc: "道路・通信等の社会基盤整備。GDP成長率を直接押し上げる最も即効性のある支出。",
     apply: (s, v) => {
       s.economic.governmentSpending.infrastructure = clamp(v, 0, 30);
     },
@@ -96,6 +101,7 @@ export const SLIDER_POLICIES: Record<SliderPolicyKey, SliderPolicyDef> = {
     max: 30,
     step: 0.5,
     label: "福祉",
+    desc: "社会保障・医療等。不満を抑制し安定度を向上。12%以上で労働者層が満足。",
     apply: (s, v) => {
       s.economic.governmentSpending.welfare = clamp(v, 0, 30);
     },
@@ -106,6 +112,7 @@ export const SLIDER_POLICIES: Record<SliderPolicyKey, SliderPolicyDef> = {
     max: 20,
     step: 0.5,
     label: "研究",
+    desc: "科学技術への投資。長期的な成長エンジン。教育と合わせてGDP比8%以上が知識人の要望。",
     apply: (s, v) => {
       s.economic.governmentSpending.research = clamp(v, 0, 20);
     },

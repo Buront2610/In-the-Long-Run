@@ -97,6 +97,9 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
           onChange={(e) => onApplyPolicy('tax_rate', Number(e.target.value))}
           style={styles.slider}
         />
+        <div style={styles.descText}>
+          税率は歳入の源泉。高すぎるとラッファー曲線により成長率が低下。50%超は特に深刻。低すぎると歳入不足に。
+        </div>
       </div>
 
       <div style={styles.divider} />
@@ -137,6 +140,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
               onChange={(e) => onApplyPolicy(policyKey, Number(e.target.value))}
               style={styles.slider}
             />
+            <div style={styles.descText}>{def.desc}</div>
           </div>
         );
       })}
@@ -401,6 +405,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 10,
     fontWeight: 'normal',
     color: '#888',
+  },
+  descText: {
+    fontSize: 10,
+    color: '#777',
+    marginBottom: 6,
+    lineHeight: 1.3,
+    paddingLeft: 2,
   },
 };
 

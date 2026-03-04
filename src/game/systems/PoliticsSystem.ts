@@ -145,6 +145,57 @@ export function checkGovernmentTransition(state: GameState, rng: () => number): 
     }
     return;
   }
+
+  // Theocracy → Constitutional Monarchy through education and reform
+  if (
+    gt === GovernmentType.THEOCRACY &&
+    state.economic.governmentSpending.education > 5 &&
+    pol.legitimacy > 60 &&
+    pol.stability > 40 &&
+    rng() < 0.08
+  ) {
+    transitionGovernment(state, GovernmentType.CONSTITUTIONAL_MONARCHY,
+      "宗教的指導者たちの間で改革派が台頭し、世俗的な統治機構との権力共有が実現しました。「信仰と理性は共存できる」という新たな合意が形成されつつあります。");
+    return;
+  }
+
+  // Republic/Democracy → One-Party State (democratic backsliding)
+  if (
+    (gt === GovernmentType.REPUBLIC || gt === GovernmentType.PARLIAMENTARY_DEMOCRACY) &&
+    pol.corruption > 70 &&
+    pol.stability < 35 &&
+    pol.legitimacy < 40 &&
+    rng() < 0.1
+  ) {
+    transitionGovernment(state, GovernmentType.ONE_PARTY_STATE,
+      "民主主義の機能不全と蔓延する腐敗に幻滅した国民が、「強い指導者」を求める声に呼応しました。選挙は形骸化し、事実上の一党支配体制が確立されています。民主主義の後退は静かに、しかし確実に進行しました。");
+    return;
+  }
+
+  // Tribal/Chiefdom → Monarchy (state formation)
+  if (
+    (gt === GovernmentType.TRIBAL || gt === GovernmentType.CHIEFDOM) &&
+    state.economic.gdp > 80 &&
+    pol.stability > 40 &&
+    rng() < 0.12
+  ) {
+    transitionGovernment(state, GovernmentType.MONARCHY,
+      "有力な首長が周辺部族を統合し、世襲制の王朝を樹立しました。「一つの民、一人の王」の旗印のもと、より組織的な国家体制が形成されつつあります。");
+    return;
+  }
+
+  // Monarchy → Absolute Monarchy (power centralization)
+  if (
+    gt === GovernmentType.MONARCHY &&
+    pol.legitimacy > 65 &&
+    pol.corruption < 50 &&
+    state.economic.treasury > 100 &&
+    rng() < 0.08
+  ) {
+    transitionGovernment(state, GovernmentType.ABSOLUTE_MONARCHY,
+      "君主が貴族勢力を抑え込み、中央集権的な統治体制を確立しました。「朕は国家なり」の宣言が象徴するように、すべての権力が王座に集中しています。");
+    return;
+  }
 }
 
 function transitionGovernment(state: GameState, newType: GovernmentType, description: string): void {
