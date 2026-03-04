@@ -1,6 +1,6 @@
 import type { GameState, ForeignNation } from "../types";
 import { DiplomaticStatus, NewsType } from "../types";
-import { clamp, addNewsItem } from "./helpers";
+import { clamp, addNewsItem, syncDebtToGdpRatio } from "./helpers";
 
 export function simulateDiplomacy(state: GameState, rng: () => number): void {
   for (const nation of state.foreignNations) {
@@ -38,6 +38,7 @@ export function simulateDiplomacy(state: GameState, rng: () => number): void {
   if (tradePartners > 0) {
     const tradeBoost = tradePartners * 0.001 * state.economic.gdp;
     state.economic.gdp += tradeBoost;
+    syncDebtToGdpRatio(state);
   }
 }
 

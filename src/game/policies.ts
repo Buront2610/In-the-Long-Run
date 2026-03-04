@@ -39,7 +39,8 @@ export interface ActionPolicyDef {
   kind: "action";
   label: string;
   cost: number;
-  apply: (state: GameState, value: number, addNews: (text: string, type: NewsType) => void) => boolean;
+  /** Called after common checks (action-used, treasury) pass and cost is deducted. */
+  apply: (state: GameState) => void;
 }
 
 // ── Helper ──────────────────────────────────────────────────────────────────
@@ -126,42 +127,17 @@ export const ACTION_POLICIES: Record<ActionPolicyKey, ActionPolicyDef> = {
     kind: "action",
     label: "反腐敗キャンペーン",
     cost: 10,
-    apply: (s, value, addNews) => {
-      if (s.actionsUsedThisTurn.includes("anti_corruption")) {
-        addNews("反腐敗キャンペーンは今期既に実施済みです。", NewsType.POLITICAL);
-        return false;
-      }
-      if (s.economic.treasury < 10) {
-        addNews("反腐敗キャンペーンのための資金が不足しています。", NewsType.POLITICAL);
-        return false;
-      }
-      const reduction = clamp(value, 0, 20);
-      s.political.corruption = clamp(s.political.corruption - reduction, 0, 100);
+    apply: (s) => {
+      s.political.corruption = clamp(s.political.corruption - 10, 0, 100);
       s.political.stability = clamp(s.political.stability - 3, 0, 100);
-      s.economic.treasury -= 10;
-      s.actionsUsedThisTurn.push("anti_corruption");
-      addNews("反腐敗キャンペーンが実施されました。", NewsType.POLITICAL);
-      return true;
     },
   },
   promote_trade: {
     kind: "action",
     label: "貿易促進",
     cost: 5,
-    apply: (s, _value, addNews) => {
-      if (s.actionsUsedThisTurn.includes("promote_trade")) {
-        addNews("貿易促進政策は今期既に実施済みです。", NewsType.ECONOMIC);
-        return false;
-      }
-      if (s.economic.treasury < 5) {
-        addNews("貿易促進のための資金が不足しています。", NewsType.ECONOMIC);
-        return false;
-      }
+    apply: (s) => {
       s.economic.tradeBalance += 3;
-      s.economic.treasury -= 5;
-      s.actionsUsedThisTurn.push("promote_trade");
-      addNews("貿易促進政策が実施されました。", NewsType.ECONOMIC);
-      return true;
     },
   },
 };

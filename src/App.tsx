@@ -34,8 +34,8 @@ function App() {
 
   const handleNextTurn = useCallback(() => {
     if (!engineRef.current) return;
-    const newState = engineRef.current.nextTurn();
-    setGameState({ ...newState });
+    engineRef.current.nextTurn();
+    setGameState(engineRef.current.getState());
     setShowTips(true);
     setShowSummary(true);
   }, []);

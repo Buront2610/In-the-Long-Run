@@ -4,7 +4,7 @@ import type { GameEvent, GameState } from "../src/game/types";
 import { DiplomaticStatus, GovernmentType, NewsType } from "../src/game/types";
 import { generateRandomEvent } from "../src/game/events";
 import { getRelevantTips } from "../src/game/tips";
-import { SLIDER_POLICIES, SLIDER_POLICY_KEYS, SPENDING_KEYS, spendingFieldKey, type SpendingPolicyKey } from "../src/game/policies";
+import { SLIDER_POLICIES, SLIDER_POLICY_KEYS, spendingFieldKey, type SpendingPolicyKey } from "../src/game/policies";
 
 function mutableState(engine: GameEngine): GameState {
   return (engine as unknown as { state: GameState }).state;

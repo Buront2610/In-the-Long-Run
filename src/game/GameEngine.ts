@@ -165,7 +165,18 @@ export class GameEngine {
 
     const actionDef = ACTION_POLICIES[action as ActionPolicyKey];
     if (actionDef) {
-      actionDef.apply(this.state, value, (text, type) => addNewsItem(this.state, text, type));
+      if (this.state.actionsUsedThisTurn.includes(action)) {
+        addNewsItem(this.state, `${actionDef.label}は今期既に実施済みです。`, NewsType.POLITICAL);
+        return;
+      }
+      if (this.state.economic.treasury < actionDef.cost) {
+        addNewsItem(this.state, `${actionDef.label}のための資金（${actionDef.cost}）が不足しています。`, NewsType.ECONOMIC);
+        return;
+      }
+      this.state.economic.treasury -= actionDef.cost;
+      this.state.actionsUsedThisTurn.push(action);
+      actionDef.apply(this.state);
+      addNewsItem(this.state, `${actionDef.label}が実施されました。`, NewsType.POLITICAL);
       return;
     }
   }
