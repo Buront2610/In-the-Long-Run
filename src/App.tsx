@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Scenario, GameState } from './game/types';
 import { GameEngine } from './game/GameEngine';
 import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from './game/constants';
@@ -18,7 +18,7 @@ import TurnSummary from './components/TurnSummary';
 type ActiveTab = 'economy' | 'policy' | 'institutions' | 'groups' | 'history' | 'map';
 
 function App() {
-  const [engine, setEngine] = useState<GameEngine | null>(null);
+  const engineRef = useRef<GameEngine | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('economy');
   const [showTips, setShowTips] = useState(true);
@@ -26,57 +26,57 @@ function App() {
 
   const handleStart = useCallback((scenario: Scenario) => {
     const e = new GameEngine(scenario);
-    setEngine(e);
+    engineRef.current = e;
     setGameState({ ...e.getState() });
     setActiveTab('economy');
     setShowTips(true);
   }, []);
 
   const handleNextTurn = useCallback(() => {
-    if (!engine) return;
-    const newState = engine.nextTurn();
-    setGameState({ ...newState });
+    if (!engineRef.current) return;
+    engineRef.current.nextTurn();
+    setGameState(engineRef.current.getState());
     setShowTips(true);
     setShowSummary(true);
-  }, [engine]);
+  }, []);
 
   const handleApplyPolicy = useCallback((action: string, value: number) => {
-    if (!engine) return;
-    engine.applyPolicy(action, value);
-    setGameState({ ...engine.getState() });
-  }, [engine]);
+    if (!engineRef.current) return;
+    engineRef.current.applyPolicy(action, value);
+    setGameState({ ...engineRef.current.getState() });
+  }, []);
 
   const handleAdoptInstitution = useCallback((id: string) => {
-    if (!engine) return;
-    engine.adoptInstitution(id);
-    setGameState({ ...engine.getState() });
-  }, [engine]);
+    if (!engineRef.current) return;
+    engineRef.current.adoptInstitution(id);
+    setGameState({ ...engineRef.current.getState() });
+  }, []);
 
   const handleRevokeInstitution = useCallback((id: string) => {
-    if (!engine) return;
-    engine.revokeInstitution(id);
-    setGameState({ ...engine.getState() });
-  }, [engine]);
+    if (!engineRef.current) return;
+    engineRef.current.revokeInstitution(id);
+    setGameState({ ...engineRef.current.getState() });
+  }, []);
 
   const handleDiplomaticAction = useCallback((nationId: string, action: string) => {
-    if (!engine) return;
-    engine.performDiplomaticAction(nationId, action);
-    setGameState({ ...engine.getState() });
-  }, [engine]);
+    if (!engineRef.current) return;
+    engineRef.current.performDiplomaticAction(nationId, action);
+    setGameState({ ...engineRef.current.getState() });
+  }, []);
 
   const handleEventChoice = useCallback((eventId: string, choiceIndex: number) => {
-    if (!engine) return;
-    engine.handleEventChoice(eventId, choiceIndex);
-    setGameState({ ...engine.getState() });
-  }, [engine]);
+    if (!engineRef.current) return;
+    engineRef.current.handleEventChoice(eventId, choiceIndex);
+    setGameState({ ...engineRef.current.getState() });
+  }, []);
 
   const handleRestart = useCallback(() => {
-    setEngine(null);
+    engineRef.current = null;
     setGameState(null);
   }, []);
 
   // Start screen
-  if (!engine || !gameState) {
+  if (!engineRef.current || !gameState) {
     return <StartScreen onStart={handleStart} />;
   }
 
