@@ -2,6 +2,16 @@ import type { GameState, ForeignNation } from "../types";
 import { DiplomaticStatus, NewsType } from "../types";
 import { clamp, addNewsItem, syncDebtToGdpRatio } from "./helpers";
 
+export const DIPLOMATIC_ACTIONS = [
+  "improve_relations",
+  "trade_agreement",
+  "form_alliance",
+  "denounce",
+  "economic_sanctions",
+] as const;
+
+export type DiplomaticAction = (typeof DIPLOMATIC_ACTIONS)[number];
+
 export function simulateDiplomacy(state: GameState, rng: () => number): void {
   for (const nation of state.foreignNations) {
     if (nation.opinion > 0) {
@@ -59,7 +69,7 @@ export function updateDiplomaticStatus(nation: ForeignNation): void {
 export function performDiplomaticAction(
   state: GameState,
   nationId: string,
-  action: string,
+  action: DiplomaticAction,
 ): boolean {
   const nation = state.foreignNations.find((n) => n.id === nationId);
   if (!nation) return false;

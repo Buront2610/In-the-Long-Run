@@ -7,12 +7,13 @@ import {
   SPENDING_KEYS,
   spendingFieldKey,
   type SpendingPolicyKey,
+  type PolicyKey,
 } from '../game/policies';
 
 interface PolicyPanelProps {
   economic: EconomicState;
   actionsUsedThisTurn: string[];
-  onApplyPolicy: (action: string, value: number) => void;
+  onApplyPolicy: (action: PolicyKey, value: number) => void;
 }
 
 function formatNum(n: number, decimals = 0): string {

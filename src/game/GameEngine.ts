@@ -21,6 +21,7 @@ import {
   ACTION_POLICIES,
   type SliderPolicyKey,
   type ActionPolicyKey,
+  type PolicyKey,
 } from "./policies";
 import {
   simulateEconomy,
@@ -29,6 +30,7 @@ import {
   processElectionCycle,
   simulateDiplomacy,
   performDiplomaticAction as doDiplomaticAction,
+  type DiplomaticAction,
   generateAndPushEvent,
   handleEventChoice as doHandleEventChoice,
   checkGameOver,
@@ -109,9 +111,9 @@ export class GameEngine {
     return structuredClone(this.state);
   }
 
-  nextTurn(): GameState {
+  nextTurn(): void {
     if (this.state.gameOver || this.state.isPaused) {
-      return this.state;
+      return;
     }
 
     const s = this.state;
@@ -152,11 +154,9 @@ export class GameEngine {
 
     // Track defense rate for demobilization shock next turn
     this.previousDefenseRate = s.economic.governmentSpending.defense;
-
-    return this.state;
   }
 
-  applyPolicy(action: string, value: number): void {
+  applyPolicy(action: PolicyKey, value: number): void {
     const sliderDef = SLIDER_POLICIES[action as SliderPolicyKey];
     if (sliderDef) {
       sliderDef.apply(this.state, value);
@@ -275,7 +275,7 @@ export class GameEngine {
 
   // ── Diplomatic Actions ──────────────────────────────────────────────
 
-  performDiplomaticAction(nationId: string, action: string): boolean {
+  performDiplomaticAction(nationId: string, action: DiplomaticAction): boolean {
     return doDiplomaticAction(this.state, nationId, action);
   }
 

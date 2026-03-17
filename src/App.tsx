@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import type { Scenario, GameState } from './game/types';
 import { GameEngine } from './game/GameEngine';
 import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from './game/constants';
+import type { PolicyKey } from './game/policies';
+import type { DiplomaticAction } from './game/systems';
 import StartScreen from './components/StartScreen';
 import EconomyPanel from './components/EconomyPanel';
 import PolicyPanel from './components/PolicyPanel';
@@ -27,7 +29,7 @@ function App() {
   const handleStart = useCallback((scenario: Scenario) => {
     const e = new GameEngine(scenario);
     engineRef.current = e;
-    setGameState({ ...e.getState() });
+    setGameState(e.getState());
     setActiveTab('economy');
     setShowTips(true);
   }, []);
@@ -40,34 +42,34 @@ function App() {
     setShowSummary(true);
   }, []);
 
-  const handleApplyPolicy = useCallback((action: string, value: number) => {
+  const handleApplyPolicy = useCallback((action: PolicyKey, value: number) => {
     if (!engineRef.current) return;
     engineRef.current.applyPolicy(action, value);
-    setGameState({ ...engineRef.current.getState() });
+    setGameState(engineRef.current.getState());
   }, []);
 
   const handleAdoptInstitution = useCallback((id: string) => {
     if (!engineRef.current) return;
     engineRef.current.adoptInstitution(id);
-    setGameState({ ...engineRef.current.getState() });
+    setGameState(engineRef.current.getState());
   }, []);
 
   const handleRevokeInstitution = useCallback((id: string) => {
     if (!engineRef.current) return;
     engineRef.current.revokeInstitution(id);
-    setGameState({ ...engineRef.current.getState() });
+    setGameState(engineRef.current.getState());
   }, []);
 
-  const handleDiplomaticAction = useCallback((nationId: string, action: string) => {
+  const handleDiplomaticAction = useCallback((nationId: string, action: DiplomaticAction) => {
     if (!engineRef.current) return;
     engineRef.current.performDiplomaticAction(nationId, action);
-    setGameState({ ...engineRef.current.getState() });
+    setGameState(engineRef.current.getState());
   }, []);
 
   const handleEventChoice = useCallback((eventId: string, choiceIndex: number) => {
     if (!engineRef.current) return;
     engineRef.current.handleEventChoice(eventId, choiceIndex);
-    setGameState({ ...engineRef.current.getState() });
+    setGameState(engineRef.current.getState());
   }, []);
 
   const handleRestart = useCallback(() => {

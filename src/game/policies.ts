@@ -1,5 +1,4 @@
 import type { GameState } from "./types";
-import { NewsType } from "./types";
 
 // ── Policy Key ──────────────────────────────────────────────────────────────
 
