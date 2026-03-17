@@ -164,6 +164,8 @@ export interface DiplomaticAction {
 export interface EventChoice {
   text: string;
   effects: Partial<EconomicState> & Partial<PoliticalState>;
+  /** If set, this choice queues the specified event id for the next turn. */
+  triggersEventId?: string;
 }
 
 export interface GameEvent {
@@ -240,4 +242,8 @@ export interface GameState {
   isPaused: boolean;
   gameOver: boolean;
   actionsUsedThisTurn: string[];
+  /** Unique slider policy keys changed this turn (for per-turn change limit). */
+  sliderChangesThisTurn: string[];
+  /** Pending chained event id to trigger on the next turn, or null. */
+  pendingChainEventId: string | null;
 }

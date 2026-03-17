@@ -2,9 +2,11 @@ import * as assert from "node:assert/strict";
 import { GameEngine } from "../src/game/GameEngine";
 import type { GameEvent, GameState } from "../src/game/types";
 import { DiplomaticStatus, GovernmentType, NewsType } from "../src/game/types";
-import { generateRandomEvent } from "../src/game/events";
+import { generateRandomEvent, CHAINED_EVENTS } from "../src/game/events";
 import { getRelevantTips } from "../src/game/tips";
 import { SLIDER_POLICIES, SLIDER_POLICY_KEYS, spendingFieldKey, type SpendingPolicyKey } from "../src/game/policies";
+import { computeForecast } from "../src/game/forecast";
+import { MAX_SLIDER_CHANGES_PER_TURN } from "../src/game/constants";
 
 function mutableState(engine: GameEngine): GameState {
   return (engine as unknown as { state: GameState }).state;
@@ -434,6 +436,225 @@ function testInvariantActionLimits(): void {
   assert.equal(actions.filter((a) => a === "promote_trade").length, 1);
 }
 
+// ── Phase 1: Policy Friction Tests ─────────────────────────────────────────
+
+function testSliderChangeTracking(): void {
+  const engine = new GameEngine();
+
+  // No changes yet
+  assert.equal(engine.getState().sliderChangesThisTurn.length, 0);
+
+  engine.applyPolicy("tax_rate", 35);
+  engine.applyPolicy("spending_defense", 4);
+  assert.equal(engine.getState().sliderChangesThisTurn.length, 2);
+
+  // Changing the same slider again does not increment the counter
+  engine.applyPolicy("tax_rate", 25);
+  assert.equal(engine.getState().sliderChangesThisTurn.length, 2);
+}
+
+function testSliderChangeLimitStabilityCost(): void {
+  const engine = new GameEngine();
+  const stabilityBefore = engine.getState().political.stability;
+
+  // Exhaust free changes
+  engine.applyPolicy("tax_rate", 35);
+  engine.applyPolicy("spending_defense", 4);
+  engine.applyPolicy("spending_education", 6);
+
+  // Stability should still be unchanged at the free limit
+  assert.equal(engine.getState().political.stability, stabilityBefore);
+
+  // 4th unique slider: stability cost kicks in
+  engine.applyPolicy("spending_infrastructure", 5);
+  assert.equal(engine.getState().political.stability, stabilityBefore - 1);
+
+  // 5th unique slider: another stability cost
+  engine.applyPolicy("spending_welfare", 10);
+  assert.equal(engine.getState().political.stability, stabilityBefore - 2);
+}
+
+function testSliderChangeLimitResetsOnNextTurn(): void {
+  const engine = new GameEngine();
+
+  // Use up the free limit
+  engine.applyPolicy("tax_rate", 35);
+  engine.applyPolicy("spending_defense", 4);
+  engine.applyPolicy("spending_education", 6);
+  assert.equal(engine.getState().sliderChangesThisTurn.length, 3);
+
+  engine.nextTurn();
+
+  // Counter should be reset
+  assert.equal(engine.getState().sliderChangesThisTurn.length, 0);
+
+  // And free changes are available again without stability cost
+  const stabilityAfterReset = engine.getState().political.stability;
+  engine.applyPolicy("tax_rate", 30);
+  engine.applyPolicy("spending_defense", 5);
+  engine.applyPolicy("spending_education", 5);
+  engine.applyPolicy("spending_welfare", 11);
+  // Only the 4th is an excess here
+  assert.ok(engine.getState().political.stability < stabilityAfterReset);
+}
+
+function testMaxSliderChangesConstantIsThree(): void {
+  // Ensure the game-balance constant is as designed
+  assert.equal(MAX_SLIDER_CHANGES_PER_TURN, 3);
+}
+
+// ── Phase 2: Forecast Tests ─────────────────────────────────────────────────
+
+function testForecastGdpUpWithProductiveSpending(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+  // High productive spending, low corruption
+  state.economic.governmentSpending.infrastructure = 10;
+  state.economic.governmentSpending.education = 10;
+  state.economic.governmentSpending.research = 10;
+  state.political.corruption = 20;
+  state.economic.taxRate = 30;
+  state.economic.gdpGrowth = 3;
+
+  const forecast = computeForecast(state);
+  assert.equal(forecast.gdp.trend, "up", "High productive spending should forecast GDP up");
+}
+
+function testForecastGdpDownWithHighCorruptionTaxDrag(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+  state.economic.governmentSpending.infrastructure = 0;
+  state.economic.governmentSpending.education = 0;
+  state.economic.governmentSpending.research = 0;
+  state.political.corruption = 90;
+  state.economic.taxRate = 60;
+  state.economic.gdpGrowth = -3;
+
+  const forecast = computeForecast(state);
+  assert.equal(forecast.gdp.trend, "down", "High corruption, high tax, and negative growth should forecast GDP down");
+}
+
+function testForecastInflationUpInWarEconomy(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+  state.economic.isWarEconomy = true;
+  state.economic.inflation = 5;
+
+  const forecast = computeForecast(state);
+  assert.equal(forecast.inflation.trend, "up", "War economy should forecast inflation up");
+}
+
+function testForecastStabilityDownWithHighUnrest(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+  state.political.unrest = 70;
+  state.economic.unemployment = 20;
+  state.economic.inflation = 15;
+  state.economic.gdpGrowth = -2;
+
+  const forecast = computeForecast(state);
+  assert.equal(forecast.stability.trend, "down", "High unrest + bad economy should forecast stability down");
+}
+
+function testForecastUnemploymentDownWithHighGrowth(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+  state.economic.gdpGrowth = 5;
+
+  const forecast = computeForecast(state);
+  assert.equal(forecast.unemployment.trend, "down", "High GDP growth should forecast unemployment down");
+}
+
+function testForecastIsPureFunction(): void {
+  // computeForecast must not mutate state
+  const engine = new GameEngine();
+  const stateBefore = engine.getState();
+  computeForecast(stateBefore);
+  const stateAfter = engine.getState();
+
+  assert.equal(stateAfter.economic.gdp, stateBefore.economic.gdp);
+  assert.equal(stateAfter.political.stability, stateBefore.political.stability);
+}
+
+// ── Phase 3: Event Chain Tests ──────────────────────────────────────────────
+
+function testEventChainRegisteredAfterChoice(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+
+  // Inject the drought event
+  const droughtTemplate = {
+    id: "drought",
+    title: "干ばつ",
+    description: "テスト",
+    year: state.year,
+    effects: {},
+    choices: [
+      { text: "輸入", effects: {} },
+      { text: "配給制", effects: {}, triggersEventId: "food_crisis_aftermath" },
+    ],
+  };
+  state.activeEvents.push(droughtTemplate);
+
+  // Choose the choice that triggers a chain
+  engine.handleEventChoice("drought", 1);
+
+  assert.equal(
+    engine.getState().pendingChainEventId,
+    "food_crisis_aftermath",
+    "Choosing a chain-triggering option should set pendingChainEventId",
+  );
+}
+
+function testEventChainTriggeredOnNextTurn(): void {
+  const engine = new GameEngine(null, () => 0.99); // rng > 0.35 suppresses random events
+  const state = mutableState(engine);
+
+  // Set up a pending chain
+  state.pendingChainEventId = "food_crisis_aftermath";
+
+  engine.nextTurn();
+
+  const afterState = engine.getState();
+  const chainedEvent = afterState.activeEvents.find((e) => e.id === "food_crisis_aftermath");
+  assert.ok(chainedEvent, "Chained event should appear in activeEvents on next turn");
+  assert.equal(afterState.pendingChainEventId, null, "pendingChainEventId should be cleared after triggering");
+}
+
+function testNonChainChoiceClearsPendingChain(): void {
+  const engine = new GameEngine();
+  const state = mutableState(engine);
+
+  // Pre-set a pending chain
+  state.pendingChainEventId = "food_crisis_aftermath";
+
+  const event: GameEvent = {
+    id: "test-no-chain",
+    title: "Test",
+    description: "Test",
+    year: state.year,
+    effects: {},
+    choices: [{ text: "No chain", effects: {} }], // no triggersEventId
+  };
+  state.activeEvents.push(event);
+
+  engine.handleEventChoice("test-no-chain", 0);
+
+  assert.equal(
+    engine.getState().pendingChainEventId,
+    null,
+    "Choosing a non-chain option should clear pendingChainEventId",
+  );
+}
+
+function testChainedEventsArrayIsNonEmpty(): void {
+  assert.ok(CHAINED_EVENTS.length > 0, "CHAINED_EVENTS should have entries");
+  for (const e of CHAINED_EVENTS) {
+    assert.ok(e.id, `Chained event must have an id`);
+    assert.ok(e.choices.length > 0, `Chained event ${e.id} must have choices`);
+  }
+}
+
 type TestCase = { name: string; run: () => void };
 
 const cases: TestCase[] = [
@@ -459,6 +680,23 @@ const cases: TestCase[] = [
   { name: "invariant: special actions limited to once per turn", run: testInvariantActionLimits },
   { name: "rng injection produces deterministic results with same seed", run: testRngDeterminism },
   { name: "all slider policies respect bounds from POLICIES definition", run: testAllSliderPolicyBounds },
+  // Phase 1: Policy Friction
+  { name: "slider change tracking counts unique keys per turn", run: testSliderChangeTracking },
+  { name: "slider change limit applies stability cost for excess changes", run: testSliderChangeLimitStabilityCost },
+  { name: "slider change limit resets on next turn", run: testSliderChangeLimitResetsOnNextTurn },
+  { name: "MAX_SLIDER_CHANGES_PER_TURN constant equals 3", run: testMaxSliderChangesConstantIsThree },
+  // Phase 2: Forecast
+  { name: "forecast: GDP up with high productive spending", run: testForecastGdpUpWithProductiveSpending },
+  { name: "forecast: GDP down with high corruption and tax drag", run: testForecastGdpDownWithHighCorruptionTaxDrag },
+  { name: "forecast: inflation up in war economy", run: testForecastInflationUpInWarEconomy },
+  { name: "forecast: stability down with high unrest and bad economy", run: testForecastStabilityDownWithHighUnrest },
+  { name: "forecast: unemployment down with high growth", run: testForecastUnemploymentDownWithHighGrowth },
+  { name: "forecast: computeForecast is a pure function", run: testForecastIsPureFunction },
+  // Phase 3: Event Chaining
+  { name: "event chain: chain id is registered after triggering choice", run: testEventChainRegisteredAfterChoice },
+  { name: "event chain: chained event is pushed to activeEvents on next turn", run: testEventChainTriggeredOnNextTurn },
+  { name: "event chain: non-chain choice clears pendingChainEventId", run: testNonChainChoiceClearsPendingChain },
+  { name: "event chain: CHAINED_EVENTS array is non-empty and valid", run: testChainedEventsArrayIsNonEmpty },
 ];
 
 let failures = 0;

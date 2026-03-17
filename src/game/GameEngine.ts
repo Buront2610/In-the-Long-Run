@@ -14,6 +14,8 @@ import {
   INITIAL_INTEREST_GROUPS,
   INITIAL_FOREIGN_NATIONS,
   getEraForYear,
+  MAX_SLIDER_CHANGES_PER_TURN,
+  SLIDER_CHANGE_STABILITY_COST,
 } from "./constants";
 import { getRelevantTips } from "./tips";
 import {
@@ -100,6 +102,8 @@ export class GameEngine {
       isPaused: false,
       gameOver: false,
       actionsUsedThisTurn: [],
+      sliderChangesThisTurn: [],
+      pendingChainEventId: null,
     };
 
     this.previousDefenseRate = this.state.economic.governmentSpending.defense;
@@ -120,6 +124,7 @@ export class GameEngine {
 
     // Reset per-turn action limits
     s.actionsUsedThisTurn = [];
+    s.sliderChangesThisTurn = [];
 
     // Record current state
     this.recordHistory();
@@ -159,6 +164,26 @@ export class GameEngine {
   applyPolicy(action: PolicyKey, value: number): void {
     const sliderDef = SLIDER_POLICIES[action as SliderPolicyKey];
     if (sliderDef) {
+      // Track unique slider changes and apply a political-friction cost beyond the free limit
+      const isFirstChange = !this.state.sliderChangesThisTurn.includes(action);
+      if (isFirstChange) {
+        const currentCount = this.state.sliderChangesThisTurn.length;
+        if (currentCount >= MAX_SLIDER_CHANGES_PER_TURN) {
+          this.state.political.stability = clamp(
+            this.state.political.stability - SLIDER_CHANGE_STABILITY_COST,
+            0,
+            100,
+          );
+          if (currentCount === MAX_SLIDER_CHANGES_PER_TURN) {
+            addNewsItem(
+              this.state,
+              "多くの政策を同時に変更すると政治的摩擦が生じます。安定度が低下しています。",
+              NewsType.POLITICAL,
+            );
+          }
+        }
+        this.state.sliderChangesThisTurn.push(action);
+      }
       sliderDef.apply(this.state, value);
       return;
     }
