@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { EconomicState, PoliticalState, ForeignNation } from '../game/types';
 import { Era, DiplomaticStatus } from '../game/types';
 import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from '../game/constants';
+import type { DiplomaticAction } from '../game/systems';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -12,7 +13,7 @@ interface WorldMapProps {
   economic: EconomicState;
   political: PoliticalState;
   foreignNations: ForeignNation[];
-  onDiplomaticAction: (nationId: string, action: string) => void;
+  onDiplomaticAction: (nationId: string, action: DiplomaticAction) => void;
 }
 
 interface RegionData {

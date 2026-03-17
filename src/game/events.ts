@@ -527,9 +527,10 @@ export const RANDOM_EVENTS: GameEvent[] = [
 export function generateRandomEvent(
   year: number,
   state: GameState,
+  rng: () => number = Math.random,
 ): GameEvent | null {
   // ~35% chance of an event each turn (slightly increased for more dynamic gameplay)
-  if (Math.random() > 0.35) {
+  if (rng() > 0.35) {
     return null;
   }
 
@@ -555,7 +556,7 @@ export function generateRandomEvent(
 
   if (candidates.length === 0) return null;
 
-  const template = candidates[Math.floor(Math.random() * candidates.length)];
+  const template = candidates[Math.floor(rng() * candidates.length)];
 
   return {
     ...template,
