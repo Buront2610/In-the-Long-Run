@@ -4,6 +4,7 @@ import { GameEngine } from './game/GameEngine';
 import { GOVERNMENT_TYPE_LABELS, ERA_LABELS } from './game/constants';
 import type { PolicyKey } from './game/policies';
 import type { DiplomaticAction } from './game/systems';
+import { computeForecast } from './game/forecast';
 import StartScreen from './components/StartScreen';
 import EconomyPanel from './components/EconomyPanel';
 import PolicyPanel from './components/PolicyPanel';
@@ -145,11 +146,12 @@ function App() {
       {/* Main Content */}
       <main style={styles.main}>
         <div style={styles.contentArea}>
-          {activeTab === 'economy' && <EconomyPanel economic={gameState.economic} />}
+          {activeTab === 'economy' && <EconomyPanel economic={gameState.economic} forecast={computeForecast(gameState)} />}
           {activeTab === 'policy' && (
             <PolicyPanel
               economic={gameState.economic}
               actionsUsedThisTurn={gameState.actionsUsedThisTurn}
+              sliderChangesThisTurn={gameState.sliderChangesThisTurn}
               onApplyPolicy={handleApplyPolicy}
             />
           )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { EconomicState } from '../game/types';
-import { WAR_ECONOMY_THRESHOLD } from '../game/constants';
+import { WAR_ECONOMY_THRESHOLD, MAX_SLIDER_CHANGES_PER_TURN } from '../game/constants';
 import {
   SLIDER_POLICIES,
   ACTION_POLICIES,
@@ -15,6 +15,7 @@ import {
 interface PolicyPanelProps {
   economic: EconomicState;
   actionsUsedThisTurn: string[];
+  sliderChangesThisTurn: string[];
   onApplyPolicy: (action: PolicyKey, value: number) => void;
 }
 
@@ -24,7 +25,7 @@ function formatNum(n: number, decimals = 0): string {
   return n.toFixed(decimals);
 }
 
-const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn, onApplyPolicy }) => {
+const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn, sliderChangesThisTurn, onApplyPolicy }) => {
   const sp = economic.governmentSpending;
   const totalSpendingRate = sp.defense + sp.education + sp.infrastructure + sp.welfare + sp.research;
   const revenue = (economic.taxRate / 100) * economic.gdp;
@@ -43,6 +44,24 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
   return (
     <div style={styles.panel}>
       <h3 style={styles.title}>財政政策</h3>
+
+      {/* ── Slider Change Counter ── */}
+      <div style={styles.sliderCounterBox}>
+        <span style={styles.sliderCounterLabel}>今ターンの政策変更</span>
+        <span style={{
+          ...styles.sliderCounterValue,
+          color: sliderChangesThisTurn.length < MAX_SLIDER_CHANGES_PER_TURN
+            ? '#53d769'
+            : '#e94560',
+        }}>
+          {sliderChangesThisTurn.length} / {MAX_SLIDER_CHANGES_PER_TURN}
+        </span>
+        <span style={styles.sliderCounterHint}>
+          {sliderChangesThisTurn.length < MAX_SLIDER_CHANGES_PER_TURN
+            ? `（あと ${MAX_SLIDER_CHANGES_PER_TURN - sliderChangesThisTurn.length} 回無料）`
+            : '（超過分: 安定度 −1/回）'}
+        </span>
+      </div>
 
       {/* ── Fiscal Summary ── */}
       <div style={styles.summaryBox}>
@@ -407,6 +426,29 @@ const styles: Record<string, React.CSSProperties> = {
   usedBadge: {
     fontSize: 10,
     fontWeight: 'normal',
+    color: '#888',
+  },
+  sliderCounterBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    padding: '6px 10px',
+    background: 'rgba(0,0,0,0.15)',
+    borderRadius: 6,
+    flexWrap: 'wrap' as const,
+  },
+  sliderCounterLabel: {
+    fontSize: 12,
+    color: '#aaa',
+  },
+  sliderCounterValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+  },
+  sliderCounterHint: {
+    fontSize: 11,
     color: '#888',
   },
   descText: {

@@ -58,6 +58,7 @@ export const RANDOM_EVENTS: GameEvent[] = [
       {
         text: "食糧の配給制を導入する — 公平な分配を優先する",
         effects: { unrest: -3, legitimacy: -5, corruption: 3 },
+        triggersEventId: "food_crisis_aftermath",
       },
     ],
     tip: "食糧危機は革命の引き金になりうる最も危険な事態の一つです。フランス革命もロシア革命も、パンの値段から始まった。",
@@ -125,6 +126,7 @@ export const RANDOM_EVENTS: GameEvent[] = [
       {
         text: "穏便に処理し沈静化を図る — 政権安定を優先する",
         effects: { corruption: 3, stability: 2, legitimacy: -5 },
+        triggersEventId: "scandal_aftermath",
       },
       {
         text: "制度改革で再発防止に取り組む — 構造的対策を講じる",
@@ -195,6 +197,7 @@ export const RANDOM_EVENTS: GameEvent[] = [
       {
         text: "技術導入を積極的に支援する — 「創造的破壊」を受け入れる",
         effects: { gdpGrowth: 2, unemployment: -1, treasury: -20 },
+        triggersEventId: "tech_labor_protest",
       },
       {
         text: "既存産業の保護を優先する — 雇用と社会安定を守る",
@@ -522,6 +525,71 @@ export const RANDOM_EVENTS: GameEvent[] = [
   },
 ];
 
+// ── Chained Event Templates ─────────────────────────────────────────────────
+//
+// These events are queued by specific choices in RANDOM_EVENTS via
+// EventChoice.triggersEventId and are consumed on the following turn.
+
+export const CHAINED_EVENTS: GameEvent[] = [
+  {
+    id: "food_crisis_aftermath",
+    title: "配給制への反発",
+    description:
+      "先の干ばつで導入された食糧配給制度が、市民の強い抵抗を生み出しています。配給所での長蛇の列と不透明な配分プロセスへの不満が高まり、一部の地域では暴動寸前の状況です。配給制度の運用改善か廃止かを迫られています。",
+    year: 0,
+    effects: { unrest: 5, legitimacy: -3 },
+    choices: [
+      {
+        text: "配給制を改善し透明性・監視体制を強化する",
+        effects: { unrest: -5, treasury: -15, bureaucracyEfficiency: 3 },
+      },
+      {
+        text: "配給制を廃止し市場価格に任せる",
+        effects: { unrest: -3, gdpGrowth: 0.5, inflation: 2 },
+      },
+    ],
+    tip: "政策の意図せぬ副作用は、元の危機と同じほど深刻になりうる。行政能力の限界を念頭に政策を設計することが重要です。",
+  },
+  {
+    id: "tech_labor_protest",
+    title: "旧産業労働者の抗議",
+    description:
+      "急速な技術革新への支援政策が、既存産業の労働者から激しい抗議を招きました。「自動化に仕事を奪われた」と訴える労働者が街頭を埋め尽くし、政治的圧力が高まっています。技術の恩恵を広く分かち合えるか、政府の対応が問われています。",
+    year: 0,
+    effects: { unrest: 8, gdpGrowth: -0.5 },
+    choices: [
+      {
+        text: "大規模な再訓練プログラムに投資する — 移行を支援する",
+        effects: { treasury: -35, unemployment: -1, unrest: -6, gdpGrowth: 0.5 },
+      },
+      {
+        text: "技術革新の速度を緩め既存産業を保護する",
+        effects: { gdpGrowth: -1, unrest: -5, stability: 2 },
+      },
+    ],
+    tip: "シュンペーター：「創造的破壊は、勝者と敗者を同時に生む」。技術革新の恩恵を広く分配する制度設計こそが、変革を持続可能にします。",
+  },
+  {
+    id: "scandal_aftermath",
+    title: "スキャンダルの余波",
+    description:
+      "政治スキャンダルの穏便な処理に不満を持つ市民が、組織的な抗議活動を開始しました。「隠蔽だ」という声が野党・市民団体から相次ぎ、国際社会も注視しています。政権への信頼がかつてないほど損なわれています。",
+    year: 0,
+    effects: { legitimacy: -8, unrest: 10 },
+    choices: [
+      {
+        text: "独立調査委員会の設置を新たに約束する",
+        effects: { legitimacy: 5, treasury: -10, corruption: -3, stability: -2 },
+      },
+      {
+        text: "広報活動で国民の理解を求め沈静化を図る",
+        effects: { legitimacy: -2, unrest: -5, stability: 2 },
+      },
+    ],
+    tip: "アクトン卿：「秘密の暴露を最も恐れる者が、最も隠すべきことを持つ」。透明性への投資は、短期的には痛みを伴うが長期的な信頼の基盤となる。",
+  },
+];
+
 // ── Event Generator ─────────────────────────────────────────────────────────
 
 export function generateRandomEvent(
@@ -565,6 +633,7 @@ export function generateRandomEvent(
     choices: template.choices.map((c) => ({
       text: c.text,
       effects: { ...c.effects },
+      ...(c.triggersEventId !== undefined ? { triggersEventId: c.triggersEventId } : {}),
     })),
     effects: { ...template.effects },
   };

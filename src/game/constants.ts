@@ -6,6 +6,12 @@ export { DEFAULT_ECONOMIC_STATE, DEFAULT_POLITICAL_STATE } from "./data/defaults
 
 export const WAR_ECONOMY_THRESHOLD = 15;
 
+/** Maximum number of distinct slider policies that can be changed for free each turn. */
+export const MAX_SLIDER_CHANGES_PER_TURN = 3;
+
+/** Stability cost applied for each slider change beyond the free limit. */
+export const SLIDER_CHANGE_STABILITY_COST = 1;
+
 // ── Data re-exports (actual data lives in data/) ────────────────────────────
 
 export { INITIAL_INSTITUTIONS } from "./data/institutions";

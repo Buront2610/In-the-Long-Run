@@ -1,11 +1,20 @@
 import React from 'react';
 import type { EconomicState } from '../game/types';
+import type { ForecastResult, ForecastTrend } from '../game/forecast';
 
 interface EconomyPanelProps {
   economic: EconomicState;
+  forecast?: ForecastResult;
 }
 
 type BadgeLevel = 'good' | 'warning' | 'danger';
+
+interface ForecastRow {
+  label: string;
+  item: { trend: ForecastTrend };
+  /** The trend direction that is considered "good" for this indicator. */
+  goodDir: ForecastTrend;
+}
 
 const badgeColors: Record<BadgeLevel, string> = {
   good: '#53d769',
@@ -30,7 +39,7 @@ function formatNum(n: number, decimals = 1): string {
   return n.toFixed(decimals);
 }
 
-const EconomyPanel: React.FC<EconomyPanelProps> = ({ economic }) => {
+const EconomyPanel: React.FC<EconomyPanelProps> = ({ economic, forecast }) => {
   const indicators: { label: string; value: string; badge: BadgeLevel; tooltip: string }[] = [
     {
       label: 'GDP',
@@ -121,6 +130,36 @@ const EconomyPanel: React.FC<EconomyPanelProps> = ({ economic }) => {
           </div>
         ))}
       </div>
+
+      {/* ── Next-Turn Forecast ── */}
+      {forecast && (
+        <div style={styles.forecastSection}>
+          <div style={styles.forecastTitle}>次ターン予測（簡易）</div>
+          <div style={styles.forecastGrid}>
+            {(([
+              { label: 'GDP成長', item: forecast.gdp, goodDir: 'up' },
+              { label: 'インフレ率', item: forecast.inflation, goodDir: 'down' },
+              { label: '安定度', item: forecast.stability, goodDir: 'up' },
+              { label: '失業率', item: forecast.unemployment, goodDir: 'down' },
+            ]) as ForecastRow[]).map(({ label, item, goodDir }) => {
+              const isGood = item.trend === goodDir;
+              const isBad = item.trend !== 'stable' && item.trend !== goodDir;
+              const color = item.trend === 'stable' ? '#ffcc00' : isGood ? '#53d769' : isBad ? '#e94560' : '#aaa';
+              const arrow = item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '→';
+              const trendLabel = item.trend === 'up' ? '上昇' : item.trend === 'down' ? '低下' : '安定';
+              return (
+                <div key={label} style={styles.forecastItem}>
+                  <span style={styles.forecastLabel}>{label}</span>
+                  <span style={{ ...styles.forecastValue, color }}>
+                    {arrow} {trendLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={styles.forecastNote}>※ 簡易予測です。実際の変動とは異なる場合があります。</div>
+        </div>
+      )}
     </div>
   );
 };
@@ -201,6 +240,44 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#888',
     paddingLeft: 14,
     lineHeight: 1.3,
+  },
+  forecastSection: {
+    marginTop: 14,
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: 6,
+    border: '1px solid rgba(255,255,255,0.08)',
+  },
+  forecastTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#aaa',
+    marginBottom: 8,
+  },
+  forecastGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 6,
+    marginBottom: 6,
+  },
+  forecastItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  forecastLabel: {
+    fontSize: 11,
+    color: '#999',
+  },
+  forecastValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  forecastNote: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center' as const,
+    marginTop: 4,
   },
 };
 
