@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import { GameEngine } from "../src/game/GameEngine";
 import type { GameEvent, GameState } from "../src/game/types";
 import { DiplomaticStatus, GovernmentType, NewsType } from "../src/game/types";
-import { generateRandomEvent, CHAINED_EVENTS } from "../src/game/events";
+import { generateRandomEvent, CHAINED_EVENTS, RANDOM_EVENTS } from "../src/game/events";
 import { getRelevantTips } from "../src/game/tips";
 import { SLIDER_POLICIES, SLIDER_POLICY_KEYS, spendingFieldKey, type SpendingPolicyKey } from "../src/game/policies";
 import { computeForecast } from "../src/game/forecast";
@@ -655,6 +655,112 @@ function testChainedEventsArrayIsNonEmpty(): void {
   }
 }
 
+function testGenerateRandomEventPreservesTriggersEventId(): void {
+  // Confirm the drought template's second choice carries triggersEventId
+  const droughtTemplate = RANDOM_EVENTS.find((e) => e.id === "drought");
+  assert.ok(droughtTemplate, "drought event must exist in RANDOM_EVENTS");
+  assert.equal(droughtTemplate.choices[1].triggersEventId, "food_crisis_aftermath");
+
+  const engine = new GameEngine();
+  const state = engine.getState();
+  const year = state.year;
+
+  // Replicate the same filter generateRandomEvent uses, to get the correct
+  // candidates array length and drought's position within it.
+  const candidates = RANDOM_EVENTS.filter((e) => {
+    if (e.id === "bubble_burst" && state.economic.gdpGrowth < 0) return false;
+    if (e.id === "labor_strike" && state.economic.unemployment > 20) return false;
+    if (e.id === "resource_discovery" && state.economic.gdpGrowth > 8) return false;
+    if (e.id === "trade_war" && state.economic.gdp < 300) return false;
+    if (e.id === "international_summit" && state.economic.gdp < 500) return false;
+    if (e.id === "constitutional_crisis" && state.political.stability > 60) return false;
+    if (e.id === "succession_crisis" && state.political.electionCycle > 0) return false;
+    if (e.id === "corruption_network_exposed" && state.political.corruption < 40) return false;
+    return true;
+  });
+
+  const droughtIdx = candidates.findIndex((e) => e.id === "drought");
+  assert.ok(droughtIdx >= 0, "drought must be present in filtered candidates");
+
+  // RNG: call 1 ≤ 0.35 → event fires; call 2 selects drought by index
+  let callCount = 0;
+  const fakeRng = (): number => {
+    callCount += 1;
+    if (callCount === 1) return 0.1;
+    return droughtIdx / candidates.length;
+  };
+
+  const event = generateRandomEvent(year, state, fakeRng);
+  assert.ok(event, "generateRandomEvent should return an event");
+  assert.equal(event!.id, "drought", "Should have generated the drought event");
+
+  // The critical assertion: triggersEventId must survive the deep-copy
+  assert.equal(
+    event!.choices[1].triggersEventId,
+    "food_crisis_aftermath",
+    "triggersEventId must be preserved by generateRandomEvent choice copy",
+  );
+}
+
+function testProductionPathChainEndToEnd(): void {
+  // Full production path:
+  //  1. generateRandomEvent picks drought
+  //  2. handleEventChoice picks choice index 1 (rationing system) which has triggersEventId
+  //  3. pendingChainEventId is set
+  //  4. nextTurn delivers the chained event into activeEvents
+
+  const engine = new GameEngine();
+  const engineState = engine.getState();
+  const state = mutableState(engine);
+  const year = state.year;
+
+  // Use the same filter replication to find drought in filtered candidates
+  const candidates = RANDOM_EVENTS.filter((e) => {
+    if (e.id === "bubble_burst" && engineState.economic.gdpGrowth < 0) return false;
+    if (e.id === "labor_strike" && engineState.economic.unemployment > 20) return false;
+    if (e.id === "resource_discovery" && engineState.economic.gdpGrowth > 8) return false;
+    if (e.id === "trade_war" && engineState.economic.gdp < 300) return false;
+    if (e.id === "international_summit" && engineState.economic.gdp < 500) return false;
+    if (e.id === "constitutional_crisis" && engineState.political.stability > 60) return false;
+    if (e.id === "succession_crisis" && engineState.political.electionCycle > 0) return false;
+    if (e.id === "corruption_network_exposed" && engineState.political.corruption < 40) return false;
+    return true;
+  });
+  const droughtIdx = candidates.findIndex((e) => e.id === "drought");
+
+  let call = 0;
+  const rngPickDrought = (): number => {
+    call += 1;
+    if (call === 1) return 0.1;
+    return droughtIdx / candidates.length;
+  };
+
+  // Generate event via real path and push onto state
+  const event = generateRandomEvent(year, engineState, rngPickDrought);
+  assert.ok(event && event.id === "drought", "Expected drought event from production path");
+  state.activeEvents.push(event!);
+
+  // Player picks choice index 1 (配給制) which carries triggersEventId
+  engine.handleEventChoice("drought", 1);
+  assert.equal(
+    engine.getState().pendingChainEventId,
+    "food_crisis_aftermath",
+    "pendingChainEventId must be set after choosing chain-triggering choice via production path",
+  );
+
+  // Turn 2: use a fresh engine with rng=0.99 (suppresses random events) and pre-set the chain
+  const engine2 = new GameEngine(null, () => 0.99);
+  const state2 = mutableState(engine2);
+  state2.pendingChainEventId = "food_crisis_aftermath";
+
+  engine2.nextTurn();
+
+  const afterState = engine2.getState();
+  const chainedEvent = afterState.activeEvents.find((e) => e.id === "food_crisis_aftermath");
+  assert.ok(chainedEvent, "Chained event food_crisis_aftermath must appear in activeEvents on next turn");
+  assert.equal(afterState.pendingChainEventId, null, "pendingChainEventId must be null after chain fires");
+}
+
 type TestCase = { name: string; run: () => void };
 
 const cases: TestCase[] = [
@@ -697,6 +803,8 @@ const cases: TestCase[] = [
   { name: "event chain: chained event is pushed to activeEvents on next turn", run: testEventChainTriggeredOnNextTurn },
   { name: "event chain: non-chain choice clears pendingChainEventId", run: testNonChainChoiceClearsPendingChain },
   { name: "event chain: CHAINED_EVENTS array is non-empty and valid", run: testChainedEventsArrayIsNonEmpty },
+  { name: "event chain: generateRandomEvent preserves triggersEventId in choice copy", run: testGenerateRandomEventPreservesTriggersEventId },
+  { name: "event chain: production path end-to-end (generate → choose → pendingChain → nextTurn fires chain)", run: testProductionPathChainEndToEnd },
 ];
 
 let failures = 0;

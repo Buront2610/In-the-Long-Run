@@ -633,6 +633,7 @@ export function generateRandomEvent(
     choices: template.choices.map((c) => ({
       text: c.text,
       effects: { ...c.effects },
+      ...(c.triggersEventId !== undefined ? { triggersEventId: c.triggersEventId } : {}),
     })),
     effects: { ...template.effects },
   };
