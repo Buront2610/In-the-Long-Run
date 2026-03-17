@@ -1,4 +1,5 @@
 import type { GameState } from "./types";
+import { NewsType } from "./types";
 
 // ── Policy Key ──────────────────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ export interface ActionPolicyDef {
   kind: "action";
   label: string;
   cost: number;
+  /** News category for this action's messages. */
+  newsType: NewsType;
   /** Called after common checks (action-used, treasury) pass and cost is deducted. */
   apply: (state: GameState) => void;
 }
@@ -126,6 +129,7 @@ export const ACTION_POLICIES: Record<ActionPolicyKey, ActionPolicyDef> = {
     kind: "action",
     label: "反腐敗キャンペーン",
     cost: 10,
+    newsType: NewsType.POLITICAL,
     apply: (s) => {
       s.political.corruption = clamp(s.political.corruption - 10, 0, 100);
       s.political.stability = clamp(s.political.stability - 3, 0, 100);
@@ -135,6 +139,7 @@ export const ACTION_POLICIES: Record<ActionPolicyKey, ActionPolicyDef> = {
     kind: "action",
     label: "貿易促進",
     cost: 5,
+    newsType: NewsType.ECONOMIC,
     apply: (s) => {
       s.economic.tradeBalance += 3;
     },

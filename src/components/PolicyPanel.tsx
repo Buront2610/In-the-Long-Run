@@ -8,6 +8,8 @@ import {
   spendingFieldKey,
   type SpendingPolicyKey,
   type PolicyKey,
+  type ActionPolicyKey,
+  type ActionPolicyDef,
 } from '../game/policies';
 
 interface PolicyPanelProps {
@@ -31,7 +33,7 @@ const PolicyPanel: React.FC<PolicyPanelProps> = ({ economic, actionsUsedThisTurn
   const fiscalBalance = economic.fiscalBalance;
   const isDeficit = fiscalBalance < 0;
 
-  const actionEntries = Object.entries(ACTION_POLICIES) as [string, typeof ACTION_POLICIES[keyof typeof ACTION_POLICIES]][];
+  const actionEntries = Object.entries(ACTION_POLICIES) as [ActionPolicyKey, ActionPolicyDef][];
 
   // Revenue vs spending bar widths (relative to max of 60%)
   const barMax = 60;
